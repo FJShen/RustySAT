@@ -13,18 +13,37 @@ pub fn get_sample_problem() -> Problem {
         (v_c, VariableState::Unassigned),
     ];
 
-    println!("{:?}", v_a);
-
     let mut _list_of_clauses = vec![
         RefCell::new(Clause{
             list_of_literals: vec![
-                Literal{variable: v_a, polarity: true}
+                Literal{variable: v_a, polarity: true},
+                Literal{variable: v_b, polarity: true},
+                Literal{variable: v_c, polarity: true},
             ], 
             status: ClauseState::Unresolved
-        })
+        }),
+        RefCell::new(Clause{
+            list_of_literals: vec![
+                Literal{variable: v_a, polarity: false},
+                Literal{variable: v_b, polarity: false}
+            ],
+            status: ClauseState::Unresolved
+        }),
+        RefCell::new(Clause{
+            list_of_literals: vec![
+                Literal{variable: v_b, polarity: true},
+                Literal{variable: v_c, polarity: false}
+            ],
+            status: ClauseState::Unresolved
+        }),
     ];
 
+    // to populate the list for LiteralInfo:
+    // Iterate over the clauses.
     let mut _list_of_literal_infos = vec![];
+    for c in &_list_of_clauses {
+        println!("{:?}", c);
+    }
 
     Problem{
         list_of_variables : _list_of_variables,
