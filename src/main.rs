@@ -8,6 +8,6 @@ use crate::sat_solver::*;
 fn main() {
     println!("Hello, world!");
     let p = get_sample_problem();
-    // println!("{:#?}", p)
+    println!("problem: {:#?}", p);
     dpll(p);
 }
