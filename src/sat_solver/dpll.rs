@@ -28,7 +28,7 @@ pub fn dpll(mut p: Problem) -> SolutionStack {
         update_literal_info_and_clauses(&mut p, var, pol);
 
         // sanity check
-        panic_if_incoherent(&mut p, &solution);
+        panic_if_incoherent(&p, &solution);
 
         let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution);
         if !resolved_all_conflicts {
@@ -132,7 +132,7 @@ pub fn update_literal_info_and_clauses(problem: &mut Problem, v: Variable, p: Po
 
 /// Sanity check solely for debug purpose. Does there exist incoherence in the
 /// representation? If so, panic!
-pub fn panic_if_incoherent(problem: &mut Problem, solution_stack: &SolutionStack) {
+pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
     // does the Problem's variable states match with the current Solution?
     solution_stack.stack.iter().for_each(|step| {
         let a = step.assignment;
