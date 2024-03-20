@@ -54,25 +54,17 @@ pub fn get_sample_problem() -> Problem {
     // Create one LiteralInfo for each literal.
     // Then iterate over the clauses: for each literal in a clause, update its
     // entry. 
-    let mut _list_of_literal_infos : Vec<LiteralInfo> = vec![];
+    let mut _list_of_literal_infos : HashMap<Literal,LiteralInfo> = HashMap::new();
     for c in &_list_of_clauses {
         for l in &(**c).borrow().list_of_literals {
-            //println!("i have literal {:?}", l)
-            let x = _list_of_literal_infos.iter_mut().find(|x| x.literal.variable == l.variable && x.literal.polarity == l.polarity);
-            match x {
-                None => {
-                    let i = LiteralInfo{
+            _list_of_literal_infos.entry(l.clone())
+                .and_modify(|e| (*e).list_of_clauses.push(Rc::clone(c)))
+                .or_insert(
+                    LiteralInfo{
                         list_of_clauses : vec![Rc::clone(c)],
-                        literal : l.clone(),
                         status : LiteralState::Unknown,
-                    };
-                    _list_of_literal_infos.push(i);
-                },
-                    
-                Some(i) => {
-                    (*i).list_of_clauses.push(Rc::clone(c));
-                },
-            };
+                    }
+                );
         }
     }
 
@@ -98,11 +90,12 @@ impl fmt::Debug for Variable {
 #[derive(Debug,PartialEq,Eq)]
 pub enum VariableState { Unassigned, Assigned }
 
-#[derive(Clone,PartialEq,Eq)]
+#[derive(Clone,PartialEq,Eq,Hash)]
 pub struct Literal { variable: Variable, polarity: Polarity }
 
 impl fmt::Debug for Literal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        // "a" and "b'" would look like "0" and "1'"
         write!(
             f, "{}{}", 
             self.variable.index,
@@ -114,7 +107,7 @@ impl fmt::Debug for Literal {
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]
 pub enum LiteralState { Unknown, Unsat, Sat }
 
-#[derive(Debug,PartialEq,Eq,Clone,Copy)]
+#[derive(Debug,PartialEq,Eq,Clone,Copy,Hash)]
 pub enum Polarity {Off, On}
 
 impl Not for Polarity {
@@ -141,7 +134,6 @@ pub enum ClauseState {Satisfied, Unsatisfiable, Unresolved}
 
 #[derive(Debug)]
 pub struct LiteralInfo {
-    literal: Literal,
     status: LiteralState,
     list_of_clauses : Vec<Rc<RefCell<Clause>>>,
 }
@@ -149,8 +141,7 @@ pub struct LiteralInfo {
 #[derive(Debug)]
 pub struct Problem {
     list_of_variables: HashMap<Variable, VariableState>,
-    // list_of_variables: Vec<(Variable, VariableState)>,
-    list_of_literal_infos: Vec<LiteralInfo>,
+    list_of_literal_infos: HashMap<Literal, LiteralInfo>,
     list_of_clauses: Vec<Rc<RefCell<Clause>>>
 }
 
@@ -228,55 +219,47 @@ impl Problem{
     pub fn update_literal_info_and_clauses(&mut self, v: Variable, p: Polarity) {
         // for both literals (on and off), 
         // - update their state from Unknown to Sat/Unsat
-        // - and update their Clauses
-        self.list_of_literal_infos
-            .iter_mut()
-            .filter(|li| li.literal.variable == v)
-            .for_each(|li|{
-                match li.literal.polarity == p {
-                    true => {
-                        // this literal is satisfied.
-                        assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
-                        li.status = LiteralState::Sat;
-                    },
-                    false => {
-                        // this literal is unsatisfied.
-                        assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
-                        li.status = LiteralState::Unsat;
-                    },
-                };
+        // - and update their Clauses' status
+        
+        // same polarity: becomes Satisfied
+        if let Some(li) = self.list_of_literal_infos.get_mut(&Literal{variable: v, polarity: p}) {
+            assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+            li.status = LiteralState::Sat;
+        }
+        // opposite polarity: becomes Unsat
+        if let Some(li) = self.list_of_literal_infos.get_mut(&Literal{variable: v, polarity: !p}) {
+            assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+            li.status = LiteralState::Unsat;
+        }
+
+        // For the SAT literal, it has the potential of changing a clause from
+        // Unresolved to Satisfied.
+        if let Some(li) = self.list_of_literal_infos.get(&Literal{variable: v, polarity: p}) {
+            li.list_of_clauses.iter().for_each(|rc|{
+                let mut c = (**rc).borrow_mut();
+                if c.status == ClauseState::Unresolved{
+                    c.status = ClauseState::Satisfied;
+                    println!("Clause {} is satisfied", c.id);
+                }
             });
+        }
 
-        self.list_of_literal_infos
-            .iter()
-            .filter(|li| li.literal.variable == v)
-            .for_each(|li| {
-                li.list_of_clauses.iter().for_each(|rc|{
-                    let mut c = (**rc).borrow_mut();
-                    // we want to see if this clause becomes satisfied or
-                    // unsatisfiable 
-                    let clause_literal_states : Vec<LiteralState>
-                        = c.list_of_literals.iter().map(|l| {
-                            // query the list of literals for their states
-                            self.list_of_literal_infos.iter().find(|li| *l == li.literal).map(|li| li.status).unwrap()
-                        }).collect();
-
-                    //println!("list of literal states are {:?}", clause_literal_states);
-
-                    // does the clause have at least one Sat? Or is it all
-                    // Unsats?
-                    if c.status == ClauseState::Unresolved{
-                        if let Some(_) = clause_literal_states.iter().find(|s| **s==LiteralState::Sat) {
-                            c.status = ClauseState::Satisfied;
-                            println!("Clause {} is satisfied", c.id);
-                        } else if let None = clause_literal_states.iter().find(|s| **s==LiteralState::Unknown){
-                            println!("Clause {} is unsatisfiable", c.id);
+        // For the UNSAT literal, it has the potential of changing a clause from
+        // Unresolved to Unsatisfiable.
+        if let Some(li) = self.list_of_literal_infos.get(&Literal{variable: v, polarity: !p}) {
+            li.list_of_clauses.iter().for_each(|rc|{
+                let mut c = (**rc).borrow_mut();
+                if c.status == ClauseState::Unresolved{
+                    // are all literals of this clause UNSAT?
+                    if let None = c.list_of_literals.iter()
+                        .map(|l| {self.list_of_literal_infos[l].status})
+                        .find(|ls| *ls == LiteralState::Sat || *ls == LiteralState::Unknown) {
                             c.status = ClauseState::Unsatisfiable;
+                            println!("Clause {} is unsatisfiable", c.id);
                         }
-                    }
-
-                })
+                }
             });
+        }
     }
 
     // For debug purpose. Does there exist incoherence in the
@@ -287,10 +270,6 @@ impl Problem{
             let a = step.assignment;
             let sol_v = a.variable;
             // the variable state must be Assigned
-            // if let None = self.list_of_variables.iter()
-            //     .find(|(v,vs)|sol_v==*v && *vs==VariableState::Assigned){
-            //         panic!("variable {:?} is on solution stack, but variable state in problem is not assigned", sol_v);
-            //     }
             if self.list_of_variables[&sol_v] != VariableState::Assigned {
                 panic!("variable {:?} is on solution stack, but variable state in problem is not assigned", sol_v);
             }
@@ -305,20 +284,24 @@ impl Problem{
 
         // does the state of a literal match with the state of variable?
         self.list_of_variables.iter().for_each(|(v, vs)|{
-            self.list_of_literal_infos.iter()
-                .filter(|li| li.literal.variable == *v)
-                .for_each(|li| {
-                    if li.status == LiteralState::Unknown && *vs == VariableState::Unassigned{}
-                    else if li.status == LiteralState::Sat && *vs == VariableState::Assigned {}
-                    else if li.status == LiteralState::Unsat && *vs == VariableState::Assigned {}
-                    else {panic!("LiteralInfo {:?} is incoherent with variable {:?}", li, (v,vs));}
-                })
+            if let Some(li) = self.list_of_literal_infos.get(&Literal{variable: *v, polarity: Polarity::On}){
+                if li.status == LiteralState::Unknown && *vs == VariableState::Unassigned{}
+                else if li.status == LiteralState::Sat && *vs == VariableState::Assigned {}
+                else if li.status == LiteralState::Unsat && *vs == VariableState::Assigned {}
+                else {panic!("LiteralInfo {:?} is incoherent with variable {:?}", li, (v,vs));}                
+            }
+            if let Some(li) = self.list_of_literal_infos.get(&Literal{variable: *v, polarity: Polarity::Off}){
+                if li.status == LiteralState::Unknown && *vs == VariableState::Unassigned{}
+                else if li.status == LiteralState::Sat && *vs == VariableState::Assigned {}
+                else if li.status == LiteralState::Unsat && *vs == VariableState::Assigned {}
+                else {panic!("LiteralInfo {:?} is incoherent with variable {:?}", li, (v,vs));}   
+            }
         });
 
         // does the state of a clause match with the state of its literals?
         self.list_of_clauses.iter().map(|rc|rc.borrow()).for_each(|c|{
             let literal_states: Vec<LiteralState> = c.list_of_literals.iter().map(|l|{
-                self.list_of_literal_infos.iter().find(|li| *l == li.literal).map(|li| li.status).unwrap()
+                self.list_of_literal_infos[l].status
             }).collect();
             // exist one SAT => clause should be SAT
             if let Some(_) = literal_states.iter().find(|s| **s==LiteralState::Sat) {assert!(c.status==ClauseState::Satisfied);}
@@ -376,12 +359,16 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 *problem.list_of_variables.get_mut(&var).unwrap() = VariableState::Unassigned;
 
                 // update the list_of_literal_infos
-                problem.list_of_literal_infos.iter_mut()
-                    .filter(|li| li.literal.variable == var)
-                    .for_each(|li| {
+                if let Some(li) = problem.list_of_literal_infos
+                    .get_mut(&Literal{variable: var, polarity: Polarity::On}){
                         assert!(li.status != LiteralState::Unknown);
-                        li.status = LiteralState::Unknown;
-                    });
+                        li.status = LiteralState::Unknown;  
+                    }
+                if let Some(li) = problem.list_of_literal_infos
+                    .get_mut(&Literal{variable: var, polarity: Polarity::Off}){
+                        assert!(li.status != LiteralState::Unknown);
+                        li.status = LiteralState::Unknown;  
+                    }
             });
 
         // drop that amount of elements
@@ -389,8 +376,9 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         assert!(stack_depth > steps_to_drop);
         solution_stack.stack.truncate(stack_depth - steps_to_drop);
         
-        // reverse the polarity of the last element in the current solution
-        // stack, and update list_of_variables and list_of_literal_infos
+        // Reverse the polarity of the last element in the current solution
+        // stack, and update list_of_literal_infos. list_of_variables need not
+        // be modified.
         let last_step = solution_stack.stack.last_mut().unwrap();
         assert!(last_step.assignment_type == SolutionStepType::FreeChoiceFirstTry);
         println!("Flipping variable {:?}", last_step.assignment.variable);
@@ -398,16 +386,16 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         last_step.assignment.polarity = !last_step.assignment.polarity;
         last_step.assignment_type = SolutionStepType::FreeChoiceSecondTry;
         
-        problem.list_of_literal_infos.iter_mut()
-            .filter(|li| li.literal.variable == last_step.assignment.variable)
-            .for_each(|li| {
-                assert!(li.status != LiteralState::Unknown);
-                if li.status == LiteralState::Sat{
-                    li.status = LiteralState::Unsat;
-                } else {
-                    li.status = LiteralState::Sat;
-                }
-            });
+        let var = &last_step.assignment.variable;
+        let new_pol = &last_step.assignment.polarity;
+        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal{variable: *var, polarity: *new_pol}){
+            assert!(li.status != LiteralState::Unknown);
+            li.status = LiteralState::Sat;  
+        }
+        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal{variable: *var, polarity: !*new_pol}){
+            assert!(li.status != LiteralState::Unknown);
+            li.status = LiteralState::Unsat;  
+        }
         
         // update the clause states
         problem.list_of_clauses.iter()
@@ -418,7 +406,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 let clause_literal_states : Vec<LiteralState>
                     = c.list_of_literals.iter().map(|l| {
                         // query the list of literals for their states
-                        problem.list_of_literal_infos.iter().find(|li| *l == li.literal).map(|li| li.status).unwrap()
+                        problem.list_of_literal_infos[l].status
                     }).collect();
 
                 // does the clause have at least one Sat? Or is it all
