@@ -132,7 +132,7 @@ pub fn get_sample_problem() -> Problem {
         for l in &(**c).borrow().list_of_literals {
             _list_of_literal_infos
                 .entry(l.clone())
-                .and_modify(|e| (*e).list_of_clauses.push(Rc::clone(c)))
+                .and_modify(|e| e.list_of_clauses.push(Rc::clone(c)))
                 .or_insert(LiteralInfo {
                     list_of_clauses: vec![Rc::clone(c)],
                     status: LiteralState::Unknown,

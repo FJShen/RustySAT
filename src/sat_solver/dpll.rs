@@ -116,11 +116,11 @@ pub fn update_literal_info_and_clauses(problem: &mut Problem, v: Variable, p: Po
             let mut c = (**rc).borrow_mut();
             if c.status == ClauseState::Unresolved {
                 // are all literals of this clause UNSAT?
-                if let None = c
+                if !c
                     .list_of_literals
                     .iter()
                     .map(|l| problem.list_of_literal_infos[l].status)
-                    .find(|ls| *ls == LiteralState::Sat || *ls == LiteralState::Unknown)
+                    .any(|ls| ls == LiteralState::Sat || ls == LiteralState::Unknown)
                 {
                     c.status = ClauseState::Unsatisfiable;
                     println!("Clause {} is unsatisfiable", c.id);
@@ -151,10 +151,10 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
         .iter()
         .filter(|(_, vs)| **vs == VariableState::Unassigned)
         .for_each(|(v, vs)| {
-            if let Some(_) = solution_stack
+            if solution_stack
                 .stack
                 .iter()
-                .find(|step| step.assignment.variable == *v)
+                .any(|step| step.assignment.variable == *v)
             {
                 panic!(
                     "variable {:?} is unassigned, but it appears on solution stack",
@@ -209,11 +209,11 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
                 .map(|l| problem.list_of_literal_infos[l].status)
                 .collect();
             // exist one SAT => clause should be SAT
-            if let Some(_) = literal_states.iter().find(|s| **s == LiteralState::Sat) {
+            if literal_states.iter().any(|s| *s == LiteralState::Sat) {
                 assert!(c.status == ClauseState::Satisfied);
             }
             // else if exist one UNKNOWN => clause should be UNRESOLVED
-            else if let Some(_) = literal_states.iter().find(|s| **s == LiteralState::Unknown) {
+            else if literal_states.iter().any(|s| *s == LiteralState::Unknown) {
                 assert!(c.status == ClauseState::Unresolved);
             }
             // otherwise => clause should be UNSAT
@@ -230,11 +230,11 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
 #[tailcall]
 pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStack) -> bool {
     // do we even have an unsatiafiable clause?
-    if let None = problem
+    if !problem
         .list_of_clauses
         .iter()
         .map(|rc| rc.borrow())
-        .find(|c| c.status == ClauseState::Unsatisfiable)
+        .any(|c| c.status == ClauseState::Unsatisfiable)
     {
         // println!("no conflicts in the current solution stack");
         return true;
@@ -244,10 +244,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
     // Find the last variable that we have not tried both polarities
     println!("Trying to resolve conflict.");
     let f_step_can_try_other_polarity = |step: &SolutionStep| -> bool {
-        match step.assignment_type {
-            SolutionStepType::FreeChoiceFirstTry => true,
-            _ => false,
-        }
+        matches!(step.assignment_type, SolutionStepType::FreeChoiceFirstTry)
     };
     let op_back_track_target = solution_stack
         .stack
@@ -340,14 +337,14 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
             // does the clause have at least one Sat? Or is it all
             // Unsats?
             let mut new_status = ClauseState::Satisfied;
-            if let Some(_) = clause_literal_states
+            if clause_literal_states
                 .iter()
-                .find(|s| **s == LiteralState::Sat)
+                .any(|s| *s == LiteralState::Sat)
             {
                 new_status = ClauseState::Satisfied;
-            } else if let None = clause_literal_states
+            } else if !clause_literal_states
                 .iter()
-                .find(|s| **s == LiteralState::Unknown)
+                .any(|s| *s == LiteralState::Unknown)
             {
                 new_status = ClauseState::Unsatisfiable;
             } else {
@@ -365,7 +362,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
             }
         });
         println!("solution stack: {:?}", solution_stack);
-        panic_if_incoherent(problem, &solution_stack);
+        panic_if_incoherent(problem, solution_stack);
 
         // recursively call into this function to resolve any new conflicts
         resolve_conflict(problem, solution_stack)
