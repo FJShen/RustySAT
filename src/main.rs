@@ -1,13 +1,12 @@
-mod sat_structures;
 mod sat_solver;
+mod sat_structures;
 
-use crate::sat_structures::*;
 use crate::sat_solver::*;
+use crate::sat_structures::*;
 
 fn main() {
-    println!("Hello, world!");
     let p = get_sample_problem();
-    println!("problem: {:#?}", p);
+    println!("problem is: {:#?}", p);
     let solution = dpll(p);
     println!("solution is {:?}", solution);
 }
