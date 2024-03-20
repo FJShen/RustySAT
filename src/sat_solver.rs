@@ -34,5 +34,7 @@ pub fn dpll(mut p: Problem) -> SolutionStack {
     //panic!("done");
   }
 
+  println!("all variables are assigned");
+
   solution
 }

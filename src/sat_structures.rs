@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use std::fmt::write;
 use std::rc::Rc;
 use std::ops::Not;
+use std::collections::HashMap;
 
 // id for clauses
 use global_counter::primitive::exact::CounterU32;
@@ -15,11 +16,11 @@ pub fn get_sample_problem() -> Problem {
     let v_b = Variable{index: 1};
     let v_c = Variable{index: 2};
 
-    let mut _list_of_variables = vec![
+    let mut _list_of_variables = HashMap::from([
         (v_a, VariableState::Unassigned),
         (v_b, VariableState::Unassigned),
         (v_c, VariableState::Unassigned),
-    ];
+    ]);
 
     let mut _list_of_clauses = vec![
         Rc::new(RefCell::new(Clause{
@@ -85,7 +86,7 @@ pub fn get_sample_problem() -> Problem {
 }
 
 
-#[derive(Clone,Copy,PartialEq,Eq)]
+#[derive(Clone,Copy,PartialEq,Eq,Hash)]
 pub struct Variable{ index: u32 }
 
 impl fmt::Debug for Variable {
@@ -147,7 +148,8 @@ pub struct LiteralInfo {
 
 #[derive(Debug)]
 pub struct Problem {
-    list_of_variables: Vec<(Variable, VariableState)>,
+    list_of_variables: HashMap<Variable, VariableState>,
+    // list_of_variables: Vec<(Variable, VariableState)>,
     list_of_literal_infos: Vec<LiteralInfo>,
     list_of_clauses: Vec<Rc<RefCell<Clause>>>
 }
@@ -211,15 +213,16 @@ impl Problem{
     /// Returns a variable that is unresolved, and a recommendation for which
     /// polarity to use. If all variables have been resolved, returns None.  
     pub fn get_one_unresolved_var(&self) -> Option<(Variable, Polarity)>{
-        let tuple_result = self.list_of_variables.iter().find(|x| x.1 == VariableState::Unassigned);
+        let tuple_result = self.list_of_variables.iter().find(|(v,vs)| **vs == VariableState::Unassigned);
         
         // for a prototype implementation, alway recommend the "Polarity::On"
-        tuple_result.map(|x| (x.0, Polarity::On))
+        tuple_result.map(|(v,vs)| (*v, Polarity::On))
     }
 
     pub fn mark_variable_assigned(&mut self, v: Variable) {
-        let v_ref = self.list_of_variables.iter_mut().find(|x| x.0.index == v.index);
-        if let Some(x) = v_ref {x.1 = VariableState::Assigned;}
+        // will panic if v is not in list_of_variables
+        let vs = self.list_of_variables.get_mut(&v).unwrap();
+        *vs = VariableState::Assigned;
     }
 
     pub fn update_literal_info_and_clauses(&mut self, v: Variable, p: Polarity) {
@@ -284,13 +287,16 @@ impl Problem{
             let a = step.assignment;
             let sol_v = a.variable;
             // the variable state must be Assigned
-            if let None = self.list_of_variables.iter()
-                .find(|(v,vs)|sol_v==*v && *vs==VariableState::Assigned){
-                    panic!("variable {:?} is on solution stack, but variable state in problem is not assigned", sol_v);
-                }
+            // if let None = self.list_of_variables.iter()
+            //     .find(|(v,vs)|sol_v==*v && *vs==VariableState::Assigned){
+            //         panic!("variable {:?} is on solution stack, but variable state in problem is not assigned", sol_v);
+            //     }
+            if self.list_of_variables[&sol_v] != VariableState::Assigned {
+                panic!("variable {:?} is on solution stack, but variable state in problem is not assigned", sol_v);
+            }
         });
 
-        self.list_of_variables.iter().filter(|(_,vs)|*vs==VariableState::Unassigned)
+        self.list_of_variables.iter().filter(|(_,vs)|**vs==VariableState::Unassigned)
             .for_each(|(v,vs)|{
                 if let Some(_) = solution_stack.stack.iter().find(|step| step.assignment.variable==*v){
                     panic!("variable {:?} is unassigned, but it appears on solution stack", (v,vs));
@@ -364,9 +370,10 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 println!("Dropping variable {:?}", var);
 
                 // update the list_of_variables
-                problem.list_of_variables.iter_mut()
-                    .filter(|(v,_)|*v==var)
-                    .for_each(|(_,vs)|*vs = VariableState::Unassigned);
+                // problem.list_of_variables.iter_mut()
+                //     .filter(|(v,_)|*v==var)
+                //     .for_each(|(_,vs)|*vs = VariableState::Unassigned);
+                *problem.list_of_variables.get_mut(&var).unwrap() = VariableState::Unassigned;
 
                 // update the list_of_literal_infos
                 problem.list_of_literal_infos.iter_mut()
