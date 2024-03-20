@@ -1,9 +1,8 @@
 use tailcall::tailcall;
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::ops::Not;
-use global_counter::generic::Counter;
+
 // id for clauses
 use global_counter::primitive::exact::CounterU32;
 
@@ -157,7 +156,7 @@ pub enum SolutionStep {
 impl SolutionStep{
     pub fn get_assignment(&self)->Assignment{
         match self {
-            Self::FreeChoice { has_tried_other_polarity, assignment } => assignment.clone(),
+            Self::FreeChoice { assignment, .. } => assignment.clone(),
             Self::ForcedChoice { assignment } => assignment.clone(),
         }
     }
@@ -330,15 +329,15 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
 
                 // un-assign this variable
                 let var = match step {
-                    SolutionStep::FreeChoice { has_tried_other_polarity, assignment } => {assignment.variable},
+                    SolutionStep::FreeChoice { assignment, .. } => {assignment.variable},
                     SolutionStep::ForcedChoice { assignment } => {assignment.variable},
                 };
                 println!("Dropping variable {:?}", var);
 
                 // update the list_of_variables
                 problem.list_of_variables.iter_mut()
-                    .filter(|(v,vs)|*v==var)
-                    .for_each(|(v,vs)|*vs = VariableState::Unassigned);
+                    .filter(|(v,_)|*v==var)
+                    .for_each(|(_,vs)|*vs = VariableState::Unassigned);
 
                 // update the list_of_literal_infos
                 problem.list_of_literal_infos.iter_mut()
@@ -356,7 +355,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         
         // reverse the polarity of the last element in the current solution
         // stack, and update list_of_variables and list_of_literal_infos
-        let mut last_step = solution_stack.stack.last_mut().unwrap();
+        let last_step = solution_stack.stack.last_mut().unwrap();
         if let SolutionStep::FreeChoice { has_tried_other_polarity, assignment } = last_step {
             println!("Reversing polarity of assignment {:?}", assignment);
 

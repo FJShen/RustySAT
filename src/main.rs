@@ -1,7 +1,6 @@
 mod sat_structures;
 mod sat_solver;
 
-use std::cell::RefCell;
 use crate::sat_structures::*;
 use crate::sat_solver::*;
 

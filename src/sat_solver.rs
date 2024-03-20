@@ -1,5 +1,4 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+
 use crate::sat_structures::*;
 
 // If the problem is UNSAT, we will not return anything but throw an exception. 
