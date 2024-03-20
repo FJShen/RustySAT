@@ -1,41 +1,110 @@
-use crate::sat_structures::*;
+use core::fmt;
+use global_counter::primitive::exact::CounterU32;
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::rc::Rc;
 
-// If the problem is UNSAT, we will not return anything but throw an exception.
-pub fn dpll(mut p: Problem) -> SolutionStack {
-    let mut solution = SolutionStack { stack: vec![] };
+// impl of DPLL algorithm
+pub mod dpll;
 
-    // Baseline DPLL
-    // 1. Pick a variable to assign
-    // 1.1 Pick a variable
-    // 1.2 Pick a polarity
-    // 2. Update the problem
-    // 2.1 Update list of variables: mark one as Assigned
-    // 2.2 Update list of literals: mark one literal as Sat, and its complement as
-    // Unsat
-    // 2.3 Update the state of each Clause associated with the literals touched in
-    // the last step
-    // 3. Resolve conflicts if any clause is unsatisfiable.
-    // 4. Repeat
-    // Resolve all variables before we return a solution
+// impl of data structure methods
+mod sat_structures;
+pub use sat_structures::get_sample_problem;
 
-    while let Some((var, pol)) = get_one_unresolved_var(&p) {
-        solution.push_free_choice_first_try(var, pol);
-        println!("dpll picking variable {:?}", var);
-        println!("solution stack: {:?}", solution);
+////////////////////////////////////////////////////////
+// Data structures for the SAT Problem
+////////////////////////////////////////////////////////
 
-        mark_variable_assigned(&mut p, var);
-        update_literal_info_and_clauses(&mut p, var, pol);
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Variable {
+    index: u32,
+}
 
-        // sanity check
-        panic_if_incoherent(&mut p, &solution);
+#[derive(Debug, PartialEq, Eq)]
+pub enum VariableState {
+    Unassigned,
+    Assigned,
+}
 
-        let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution);
-        if !resolved_all_conflicts {
-            panic!("UNSAT");
-        }
-    }
+#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct Literal {
+    variable: Variable,
+    polarity: Polarity,
+}
 
-    println!("all variables are assigned");
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiteralState {
+    Unknown,
+    Unsat,
+    Sat,
+}
 
-    solution
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
+pub enum Polarity {
+    Off,
+    On,
+}
+
+static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
+
+#[derive(Debug)]
+pub struct Clause {
+    id: u32,
+    status: ClauseState,
+    list_of_literals: Vec<Literal>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClauseState {
+    Satisfied,
+    Unsatisfiable,
+    Unresolved,
+}
+
+#[derive(Debug)]
+pub struct LiteralInfo {
+    status: LiteralState,
+    list_of_clauses: Vec<Rc<RefCell<Clause>>>,
+}
+
+#[derive(Debug)]
+pub struct Problem {
+    // The benefit of using BTreeMap instead of a BTreeMap: when debug-printing
+    // the contents of the former, entries are sorted in a human-friendly way.
+    list_of_variables: BTreeMap<Variable, VariableState>,
+    list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
+    list_of_clauses: Vec<Rc<RefCell<Clause>>>,
+}
+
+////////////////////////////////////////////////////////
+// Data structures for the SAT Solution
+////////////////////////////////////////////////////////
+
+#[derive(Debug, Clone, Copy)]
+pub struct Assignment {
+    variable: Variable,
+    polarity: Polarity,
+}
+
+//#[derive(Debug)]
+pub struct SolutionStep {
+    assignment: Assignment,
+    assignment_type: SolutionStepType,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum SolutionStepType {
+    // we picked this variable at will and we haven't flipped its complement
+    FreeChoiceFirstTry,
+    // we have flipped this assignment's polarity during a backtrack
+    FreeChoiceSecondTry,
+    // forced due to BCP
+    ForcedChoice,
+}
+
+#[derive(Debug)]
+pub struct SolutionStack {
+    // the stack will look like:
+    // (FreeChoice,(ForcedChoice,)*)*
+    pub stack: Vec<SolutionStep>,
 }

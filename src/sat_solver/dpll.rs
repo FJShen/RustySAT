@@ -1,266 +1,44 @@
-use core::fmt;
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::ops::Not;
-use std::rc::Rc;
+use super::*;
 use tailcall::tailcall;
 
-// id for clauses
-use global_counter::primitive::exact::CounterU32;
+// If the problem is UNSAT, we will not return anything but throw an exception.
+pub fn dpll(mut p: Problem) -> SolutionStack {
+    let mut solution = SolutionStack { stack: vec![] };
 
-////////////////////////////////////////////////////////
-// Data structures for the SAT Problem
-////////////////////////////////////////////////////////
+    // Baseline DPLL
+    // 1. Pick a variable to assign
+    // 1.1 Pick a variable
+    // 1.2 Pick a polarity
+    // 2. Update the problem
+    // 2.1 Update list of variables: mark one as Assigned
+    // 2.2 Update list of literals: mark one literal as Sat, and its complement as
+    // Unsat
+    // 2.3 Update the state of each Clause associated with the literals touched in
+    // the last step
+    // 3. Resolve conflicts if any clause is unsatisfiable.
+    // 4. Repeat
+    // Resolve all variables before we return a solution
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Variable {
-    index: u32,
-}
+    while let Some((var, pol)) = get_one_unresolved_var(&p) {
+        solution.push_free_choice_first_try(var, pol);
+        println!("dpll picking variable {:?}", var);
+        println!("solution stack: {:?}", solution);
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum VariableState {
-    Unassigned,
-    Assigned,
-}
+        mark_variable_assigned(&mut p, var);
+        update_literal_info_and_clauses(&mut p, var, pol);
 
-impl fmt::Debug for Variable {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "var#{}", self.index)
-    }
-}
+        // sanity check
+        panic_if_incoherent(&mut p, &solution);
 
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Literal {
-    variable: Variable,
-    polarity: Polarity,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LiteralState {
-    Unknown,
-    Unsat,
-    Sat,
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
-pub enum Polarity {
-    Off,
-    On,
-}
-
-impl Not for Polarity {
-    type Output = Self;
-    fn not(self) -> Self::Output {
-        match self {
-            Polarity::Off => Polarity::On,
-            Polarity::On => Polarity::Off,
-        }
-    }
-}
-
-impl fmt::Debug for Literal {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // "a" and "b'" would look like "0" and "1'"
-        write!(
-            f,
-            "{}{}",
-            self.variable.index,
-            if self.polarity == Polarity::On {
-                ""
-            } else {
-                "^"
-            }
-        )
-    }
-}
-
-static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
-
-#[derive(Debug)]
-pub struct Clause {
-    id: u32,
-    status: ClauseState,
-    list_of_literals: Vec<Literal>,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum ClauseState {
-    Satisfied,
-    Unsatisfiable,
-    Unresolved,
-}
-
-#[derive(Debug)]
-pub struct LiteralInfo {
-    status: LiteralState,
-    list_of_clauses: Vec<Rc<RefCell<Clause>>>,
-}
-
-#[derive(Debug)]
-pub struct Problem {
-    // The benefit of using BTreeMap instead of a BTreeMap: when debug-printing
-    // the contents of the former, entries are sorted in a human-friendly way.
-    list_of_variables: BTreeMap<Variable, VariableState>,
-    list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
-    list_of_clauses: Vec<Rc<RefCell<Clause>>>,
-}
-
-// hard-code a SAT problem so I can try the baseline DPLL algorithm.
-pub fn get_sample_problem() -> Problem {
-    // f = (a + b + c) (a' + b') (b + c')
-    // one example solution: a=1, b=0, c=0
-    let v_a = Variable { index: 0 };
-    let v_b = Variable { index: 1 };
-    let v_c = Variable { index: 2 };
-
-    let mut _list_of_variables = BTreeMap::from([
-        (v_a, VariableState::Unassigned),
-        (v_b, VariableState::Unassigned),
-        (v_c, VariableState::Unassigned),
-    ]);
-
-    let mut _list_of_clauses = vec![
-        Rc::new(RefCell::new(Clause {
-            id: CLAUSE_COUNTER.inc(),
-            list_of_literals: vec![
-                Literal {
-                    variable: v_a,
-                    polarity: Polarity::On,
-                },
-                Literal {
-                    variable: v_b,
-                    polarity: Polarity::On,
-                },
-                Literal {
-                    variable: v_c,
-                    polarity: Polarity::On,
-                },
-            ],
-            status: ClauseState::Unresolved,
-        })),
-        Rc::new(RefCell::new(Clause {
-            id: CLAUSE_COUNTER.inc(),
-            list_of_literals: vec![
-                Literal {
-                    variable: v_a,
-                    polarity: Polarity::Off,
-                },
-                Literal {
-                    variable: v_b,
-                    polarity: Polarity::Off,
-                },
-            ],
-            status: ClauseState::Unresolved,
-        })),
-        Rc::new(RefCell::new(Clause {
-            id: CLAUSE_COUNTER.inc(),
-            list_of_literals: vec![
-                Literal {
-                    variable: v_b,
-                    polarity: Polarity::On,
-                },
-                Literal {
-                    variable: v_c,
-                    polarity: Polarity::Off,
-                },
-            ],
-            status: ClauseState::Unresolved,
-        })),
-    ];
-
-    // To populate the list for LiteralInfo:
-    // Create one LiteralInfo for each literal.
-    // Then iterate over the clauses: for each literal in a clause, update its
-    // entry.
-    let mut _list_of_literal_infos: BTreeMap<Literal, LiteralInfo> = BTreeMap::new();
-    for c in &_list_of_clauses {
-        for l in &(**c).borrow().list_of_literals {
-            _list_of_literal_infos
-                .entry(l.clone())
-                .and_modify(|e| (*e).list_of_clauses.push(Rc::clone(c)))
-                .or_insert(LiteralInfo {
-                    list_of_clauses: vec![Rc::clone(c)],
-                    status: LiteralState::Unknown,
-                });
+        let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution);
+        if !resolved_all_conflicts {
+            panic!("UNSAT");
         }
     }
 
-    // println!("After the loop, list_of_literal_infos is: {:#?}", _list_of_literal_infos);
+    println!("all variables are assigned");
 
-    Problem {
-        list_of_variables: _list_of_variables,
-        list_of_literal_infos: _list_of_literal_infos,
-        list_of_clauses: _list_of_clauses,
-    }
-}
-
-////////////////////////////////////////////////////////
-// Data structures for the SAT Solution
-////////////////////////////////////////////////////////
-
-#[derive(Debug, Clone, Copy)]
-pub struct Assignment {
-    variable: Variable,
-    polarity: Polarity,
-}
-
-//#[derive(Debug)]
-pub struct SolutionStep {
-    assignment: Assignment,
-    assignment_type: SolutionStepType,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum SolutionStepType {
-    // we picked this variable at will and we haven't flipped its complement
-    FreeChoiceFirstTry,
-    // we have flipped this assignment's polarity during a backtrack
-    FreeChoiceSecondTry,
-    // forced due to BCP
-    ForcedChoice,
-}
-
-impl fmt::Debug for SolutionStep {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self.assignment_type {
-                SolutionStepType::FreeChoiceFirstTry => "t",
-                SolutionStepType::FreeChoiceSecondTry => "T",
-                SolutionStepType::ForcedChoice => "x",
-            }
-        )?;
-        write!(f, "{}", self.assignment.variable.index)?;
-        write!(
-            f,
-            "{}",
-            match self.assignment.polarity {
-                Polarity::On => "",
-                Polarity::Off => "^",
-            }
-        )
-    }
-}
-
-#[derive(Debug)]
-pub struct SolutionStack {
-    // the stack will look like:
-    // (FreeChoice,(ForcedChoice,)*)*
-    pub stack: Vec<SolutionStep>,
-}
-
-impl SolutionStack {
-    pub fn push_free_choice_first_try(&mut self, var: Variable, pol: Polarity) {
-        let step = SolutionStep {
-            assignment: Assignment {
-                variable: var,
-                polarity: pol,
-            },
-            assignment_type: SolutionStepType::FreeChoiceFirstTry,
-        };
-        self.stack.push(step);
-    }
+    solution
 }
 
 ////////////////////////////////////////////////////////
