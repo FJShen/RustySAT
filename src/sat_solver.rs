@@ -18,9 +18,10 @@ pub fn dpll(mut p: Problem) -> SolutionStack {
   // 3. Resolve conflicts if any clause is unsatisfiable
   // 4. Repeat
   while let Some((var, pol)) =  p.get_one_unresolved_var() {
-    solution.push_free_choice(var, pol);
-    p.mark_variable_assigned(var);
+    solution.push_free_choice_first_try(var, pol);
     println!("dpll marking variable {:?} as assigned.", var);
+    println!("solution stack: {:?}", solution);
+    p.mark_variable_assigned(var);
     p.update_literal_info_and_clauses(var, pol);
     //println!("after update, problem is {:#?}", p);
     //println!("after update, solution is {:#?}", solution);

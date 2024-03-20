@@ -1,5 +1,7 @@
 use tailcall::tailcall;
+use core::fmt;
 use std::cell::RefCell;
+use std::fmt::write;
 use std::rc::Rc;
 use std::ops::Not;
 
@@ -83,14 +85,30 @@ pub fn get_sample_problem() -> Problem {
 }
 
 
-#[derive(Debug,Clone,Copy,PartialEq,Eq)]
+#[derive(Clone,Copy,PartialEq,Eq)]
 pub struct Variable{ index: u32 }
+
+impl fmt::Debug for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "var#{}", self.index)
+    }
+}
 
 #[derive(Debug,PartialEq,Eq)]
 pub enum VariableState { Unassigned, Assigned }
 
-#[derive(Debug,Clone,PartialEq,Eq)]
+#[derive(Clone,PartialEq,Eq)]
 pub struct Literal { variable: Variable, polarity: Polarity }
+
+impl fmt::Debug for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f, "{}{}", 
+            self.variable.index,
+            if self.polarity==Polarity::On {""} else {"'"}
+        )
+    }
+}
 
 #[derive(Debug,Clone,Copy,PartialEq,Eq)]
 pub enum LiteralState { Unknown, Unsat, Sat }
@@ -141,24 +159,34 @@ pub struct Assignment {
     polarity: Polarity
 }
 
-#[derive(Debug)]
-pub enum SolutionStep {
-    // we picked this variable at will
-    FreeChoice{
-        has_tried_other_polarity: bool,
-        assignment: Assignment
-    }, 
-
-    // forced due to BCP
-    ForcedChoice{assignment: Assignment}, 
+//#[derive(Debug)]
+pub struct SolutionStep {
+    assignment: Assignment,
+    assignment_type: SolutionStepType,
 }
 
-impl SolutionStep{
-    pub fn get_assignment(&self)->Assignment{
-        match self {
-            Self::FreeChoice { assignment, .. } => assignment.clone(),
-            Self::ForcedChoice { assignment } => assignment.clone(),
-        }
+#[derive(Debug,PartialEq,Eq)]
+pub enum SolutionStepType{
+    // we picked this variable at will and we haven't flipped its complement
+    FreeChoiceFirstTry,
+    // we have flipped this assignment's polarity during a backtrack
+    FreeChoiceSecondTry,
+    // forced due to BCP
+    ForcedChoice,
+}
+
+impl fmt::Debug for SolutionStep {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self.assignment_type {
+            SolutionStepType::FreeChoiceFirstTry => "t",
+            SolutionStepType::FreeChoiceSecondTry => "T",
+            SolutionStepType::ForcedChoice => "x",
+        })?;
+        write!(f, "{}", self.assignment.variable.index)?;
+        write!(f, "{}", match self.assignment.polarity {
+            Polarity::On => "",
+            Polarity::Off => "'",
+        })
     }
 }
 
@@ -170,10 +198,10 @@ pub struct SolutionStack {
 }
 
 impl SolutionStack{
-    pub fn push_free_choice(&mut self, var: Variable, pol: Polarity){
-        let step = SolutionStep::FreeChoice { 
-            has_tried_other_polarity: false, 
-            assignment: Assignment{variable: var, polarity: pol}
+    pub fn push_free_choice_first_try(&mut self, var: Variable, pol: Polarity){
+        let step = SolutionStep{
+            assignment: Assignment{variable: var, polarity: pol},
+            assignment_type: SolutionStepType::FreeChoiceFirstTry
         };
         self.stack.push(step);
     }
@@ -181,7 +209,7 @@ impl SolutionStack{
 
 impl Problem{
     /// Returns a variable that is unresolved, and a recommendation for which
-    /// polarity to use.
+    /// polarity to use. If all variables have been resolved, returns None.  
     pub fn get_one_unresolved_var(&self) -> Option<(Variable, Polarity)>{
         let tuple_result = self.list_of_variables.iter().find(|x| x.1 == VariableState::Unassigned);
         
@@ -195,7 +223,6 @@ impl Problem{
     }
 
     pub fn update_literal_info_and_clauses(&mut self, v: Variable, p: Polarity) {
-        println!("updating variable {:?} with polarity {:?}", v, p);
         // for both literals (on and off), 
         // - update their state from Unknown to Sat/Unsat
         // - and update their Clauses
@@ -235,13 +262,16 @@ impl Problem{
 
                     // does the clause have at least one Sat? Or is it all
                     // Unsats?
-                    if let Some(_) = clause_literal_states.iter().find(|s| **s==LiteralState::Sat) {
-                        c.status = ClauseState::Satisfied;
-                        println!("Clause {} is satisfied", c.id);
-                    } else if let None = clause_literal_states.iter().find(|s| **s==LiteralState::Unknown){
-                        println!("Clause {} is unsatisfied", c.id);
-                        c.status = ClauseState::Unsatisfiable;
+                    if c.status == ClauseState::Unresolved{
+                        if let Some(_) = clause_literal_states.iter().find(|s| **s==LiteralState::Sat) {
+                            c.status = ClauseState::Satisfied;
+                            println!("Clause {} is satisfied", c.id);
+                        } else if let None = clause_literal_states.iter().find(|s| **s==LiteralState::Unknown){
+                            println!("Clause {} is unsatisfiable", c.id);
+                            c.status = ClauseState::Unsatisfiable;
+                        }
                     }
+
                 })
             });
     }
@@ -251,7 +281,7 @@ impl Problem{
     pub fn panic_if_incoherent(& self,  solution_stack: &SolutionStack){
         // does the Problem's variable states match with the current Solution?
         solution_stack.stack.iter().for_each(|step| {
-            let a = step.get_assignment();
+            let a = step.assignment;
             let sol_v = a.variable;
             // the variable state must be Assigned
             if let None = self.list_of_variables.iter()
@@ -262,7 +292,7 @@ impl Problem{
 
         self.list_of_variables.iter().filter(|(_,vs)|*vs==VariableState::Unassigned)
             .for_each(|(v,vs)|{
-                if let Some(_) = solution_stack.stack.iter().find(|step| step.get_assignment().variable==*v){
+                if let Some(_) = solution_stack.stack.iter().find(|step| step.assignment.variable==*v){
                     panic!("variable {:?} is unassigned, but it appears on solution stack", (v,vs));
                 }
             });
@@ -304,16 +334,18 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
     if let None = problem.list_of_clauses.iter()
         .map(|rc|rc.borrow())
         .find(|c|c.status==ClauseState::Unsatisfiable){
-            println!("no conflicts in the current solution stack");
+            // println!("no conflicts in the current solution stack");
             return true;
         };
 
     // We do have a conflict. Backtrack!
     // Find the last variable that we have not tried both polarities
+    println!("Trying to resolve conflict.");
     let f_step_can_try_other_polarity = |step: &SolutionStep| -> bool{
-        if let SolutionStep::FreeChoice { has_tried_other_polarity, .. } = step{
-            !has_tried_other_polarity
-        } else {false}
+        match step.assignment_type {
+            SolutionStepType::FreeChoiceFirstTry => true,
+            _ => false,
+        }
     };
     let op_back_track_target = solution_stack.stack.iter().rfind(|step|f_step_can_try_other_polarity(step));
 
@@ -328,10 +360,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 steps_to_drop += 1;
 
                 // un-assign this variable
-                let var = match step {
-                    SolutionStep::FreeChoice { assignment, .. } => {assignment.variable},
-                    SolutionStep::ForcedChoice { assignment } => {assignment.variable},
-                };
+                let var = step.assignment.variable;
                 println!("Dropping variable {:?}", var);
 
                 // update the list_of_variables
@@ -356,23 +385,22 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         // reverse the polarity of the last element in the current solution
         // stack, and update list_of_variables and list_of_literal_infos
         let last_step = solution_stack.stack.last_mut().unwrap();
-        if let SolutionStep::FreeChoice { has_tried_other_polarity, assignment } = last_step {
-            println!("Reversing polarity of assignment {:?}", assignment);
+        assert!(last_step.assignment_type == SolutionStepType::FreeChoiceFirstTry);
+        println!("Flipping variable {:?}", last_step.assignment.variable);
 
-            assignment.polarity = !assignment.polarity;
-            *has_tried_other_polarity = true;
-            
-            problem.list_of_literal_infos.iter_mut()
-                .filter(|li| li.literal.variable == assignment.variable)
-                .for_each(|li| {
-                    assert!(li.status != LiteralState::Unknown);
-                    if li.status == LiteralState::Sat{
-                        li.status = LiteralState::Unsat;
-                    } else {
-                        li.status = LiteralState::Sat;
-                    }
-                });
-        } else {panic!("last_step must not be forced choice");}
+        last_step.assignment.polarity = !last_step.assignment.polarity;
+        last_step.assignment_type = SolutionStepType::FreeChoiceSecondTry;
+        
+        problem.list_of_literal_infos.iter_mut()
+            .filter(|li| li.literal.variable == last_step.assignment.variable)
+            .for_each(|li| {
+                assert!(li.status != LiteralState::Unknown);
+                if li.status == LiteralState::Sat{
+                    li.status = LiteralState::Unsat;
+                } else {
+                    li.status = LiteralState::Sat;
+                }
+            });
         
         // update the clause states
         problem.list_of_clauses.iter()
@@ -388,20 +416,29 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
 
                 // does the clause have at least one Sat? Or is it all
                 // Unsats?
+                let mut new_status = ClauseState::Satisfied;
                 if let Some(_) = clause_literal_states.iter().find(|s| **s==LiteralState::Sat) {
-                    c.status = ClauseState::Satisfied;
-                    println!("Clause {} is satisfied", c.id);
+                    new_status = ClauseState::Satisfied;
                 } else if let None = clause_literal_states.iter().find(|s| **s==LiteralState::Unknown){
-                    println!("Clause {} is unsatisfied", c.id);
-                    c.status = ClauseState::Unsatisfiable;
+                    new_status = ClauseState::Unsatisfiable;
                 } else {
-                    println!("Clause {} is unresolved", c.id);
-                    c.status = ClauseState::Unresolved;
+                    new_status = ClauseState::Unresolved;
+                }
+
+                if new_status != c.status{
+                    c.status = new_status;
+                    let s = match c.status {
+                        ClauseState::Satisfied => "satisfied",
+                        ClauseState::Unsatisfiable=> "unsatisfiable",
+                        ClauseState::Unresolved => "unresolved",
+                    };
+                    println!("Clause {} becomes {}", c.id, s);
                 }
             });
+        println!("solution stack: {:?}", solution_stack);
         problem.panic_if_incoherent(&solution_stack);
 
         // recursively call into this function to resolve any new conflicts
-        return resolve_conflict(problem, solution_stack);
+        resolve_conflict(problem, solution_stack)
     }
 }
