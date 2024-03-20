@@ -1,6 +1,6 @@
 use core::fmt;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::ops::Not;
 use std::rc::Rc;
 use tailcall::tailcall;
@@ -98,10 +98,10 @@ pub struct LiteralInfo {
 
 #[derive(Debug)]
 pub struct Problem {
-    // The benefit of using HashMap instead of a HashMap: when debug-printing
+    // The benefit of using BTreeMap instead of a BTreeMap: when debug-printing
     // the contents of the former, entries are sorted in a human-friendly way.
-    list_of_variables: HashMap<Variable, VariableState>,
-    list_of_literal_infos: HashMap<Literal, LiteralInfo>,
+    list_of_variables: BTreeMap<Variable, VariableState>,
+    list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
     list_of_clauses: Vec<Rc<RefCell<Clause>>>,
 }
 
@@ -113,7 +113,7 @@ pub fn get_sample_problem() -> Problem {
     let v_b = Variable { index: 1 };
     let v_c = Variable { index: 2 };
 
-    let mut _list_of_variables = HashMap::from([
+    let mut _list_of_variables = BTreeMap::from([
         (v_a, VariableState::Unassigned),
         (v_b, VariableState::Unassigned),
         (v_c, VariableState::Unassigned),
@@ -172,7 +172,7 @@ pub fn get_sample_problem() -> Problem {
     // Create one LiteralInfo for each literal.
     // Then iterate over the clauses: for each literal in a clause, update its
     // entry.
-    let mut _list_of_literal_infos: HashMap<Literal, LiteralInfo> = HashMap::new();
+    let mut _list_of_literal_infos: BTreeMap<Literal, LiteralInfo> = BTreeMap::new();
     for c in &_list_of_clauses {
         for l in &(**c).borrow().list_of_literals {
             _list_of_literal_infos
