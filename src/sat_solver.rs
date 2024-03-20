@@ -23,10 +23,15 @@ pub fn dpll(mut p: Problem) -> SolutionStack {
     p.mark_variable_assigned(var);
     println!("dpll marking variable {:?} as assigned.", var);
     p.update_literal_info_and_clauses(var, pol);
-    println!("after update, problem is {:#?}", p);
-    println!("after update, solution is {:#?}", solution);
+    //println!("after update, problem is {:#?}", p);
+    //println!("after update, solution is {:#?}", solution);
     p.panic_if_incoherent(&solution);
-    panic!("done");
+    
+    let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution);
+    if !resolved_all_conflicts{
+      panic!("UNSAT");
+    }
+    //panic!("done");
   }
 
   solution

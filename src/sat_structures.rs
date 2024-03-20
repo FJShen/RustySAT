@@ -1,5 +1,11 @@
+use tailcall::tailcall;
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::ops::Not;
+use global_counter::generic::Counter;
+// id for clauses
+use global_counter::primitive::exact::CounterU32;
 
 pub fn get_sample_problem() -> Problem {
     // f = (a + b + c) (a' + b') (b + c')
@@ -16,6 +22,7 @@ pub fn get_sample_problem() -> Problem {
 
     let mut _list_of_clauses = vec![
         Rc::new(RefCell::new(Clause{
+            id: CLAUSE_COUNTER.inc(),
             list_of_literals: vec![
                 Literal{variable: v_a, polarity: Polarity::On},
                 Literal{variable: v_b, polarity: Polarity::On},
@@ -24,6 +31,7 @@ pub fn get_sample_problem() -> Problem {
             status: ClauseState::Unresolved
         })),
         Rc::new(RefCell::new(Clause{
+            id: CLAUSE_COUNTER.inc(),
             list_of_literals: vec![
                 Literal{variable: v_a, polarity: Polarity::Off},
                 Literal{variable: v_b, polarity: Polarity::Off}
@@ -31,6 +39,7 @@ pub fn get_sample_problem() -> Problem {
             status: ClauseState::Unresolved
         })),
         Rc::new(RefCell::new(Clause{
+            id: CLAUSE_COUNTER.inc(),
             list_of_literals: vec![
                 Literal{variable: v_b, polarity: Polarity::On},
                 Literal{variable: v_c, polarity: Polarity::Off}
@@ -45,9 +54,9 @@ pub fn get_sample_problem() -> Problem {
     // entry. 
     let mut _list_of_literal_infos : Vec<LiteralInfo> = vec![];
     for c in &_list_of_clauses {
-        for l in &c.borrow_mut().list_of_literals {
+        for l in &(**c).borrow().list_of_literals {
             //println!("i have literal {:?}", l)
-            let x = _list_of_literal_infos.iter_mut().find(|x| x.literal.variable.index == l.variable.index && x.literal.polarity == l.polarity);
+            let x = _list_of_literal_infos.iter_mut().find(|x| x.literal.variable == l.variable && x.literal.polarity == l.polarity);
             match x {
                 None => {
                     let i = LiteralInfo{
@@ -90,8 +99,21 @@ pub enum LiteralState { Unknown, Unsat, Sat }
 #[derive(Debug,PartialEq,Eq,Clone,Copy)]
 pub enum Polarity {Off, On}
 
+impl Not for Polarity {
+    type Output = Self;
+    fn not(self) -> Self::Output {
+        match self {
+            Polarity::Off => Polarity::On,
+            Polarity::On => Polarity::Off,
+        }
+    }
+}
+
+static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
+
 #[derive(Debug)]
 pub struct Clause { 
+    id: u32,
     status: ClauseState,
     list_of_literals: Vec<Literal>,
 }
@@ -175,35 +197,33 @@ impl Problem{
 
     pub fn update_literal_info_and_clauses(&mut self, v: Variable, p: Polarity) {
         println!("updating variable {:?} with polarity {:?}", v, p);
-        // for both literals, 
+        // for both literals (on and off), 
         // - update their state from Unknown to Sat/Unsat
         // - and update their Clauses
         self.list_of_literal_infos
             .iter_mut()
             .filter(|li| li.literal.variable == v)
             .for_each(|li|{
-                println!("literal info is {:?}", li);
                 match li.literal.polarity == p {
-                true => {
-                    // this literal is satisfied.
-                    println!("literal is satisfied");
-                    assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
-                    li.status = LiteralState::Sat;
-                },
-                false => {
-                    // this literal is unsatisfied.
-                    println!("literal is unsatisfied");
-                    assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
-                    li.status = LiteralState::Unsat;
-                },
-            };});
+                    true => {
+                        // this literal is satisfied.
+                        assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+                        li.status = LiteralState::Sat;
+                    },
+                    false => {
+                        // this literal is unsatisfied.
+                        assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+                        li.status = LiteralState::Unsat;
+                    },
+                };
+            });
 
         self.list_of_literal_infos
             .iter()
             .filter(|li| li.literal.variable == v)
             .for_each(|li| {
                 li.list_of_clauses.iter().for_each(|rc|{
-                    let mut c = rc.borrow_mut();
+                    let mut c = (**rc).borrow_mut();
                     // we want to see if this clause becomes satisfied or
                     // unsatisfiable 
                     let clause_literal_states : Vec<LiteralState>
@@ -212,13 +232,15 @@ impl Problem{
                             self.list_of_literal_infos.iter().find(|li| *l == li.literal).map(|li| li.status).unwrap()
                         }).collect();
 
-                    println!("list of literal states are {:?}", clause_literal_states);
+                    //println!("list of literal states are {:?}", clause_literal_states);
 
                     // does the clause have at least one Sat? Or is it all
                     // Unsats?
                     if let Some(_) = clause_literal_states.iter().find(|s| **s==LiteralState::Sat) {
                         c.status = ClauseState::Satisfied;
+                        println!("Clause {} is satisfied", c.id);
                     } else if let None = clause_literal_states.iter().find(|s| **s==LiteralState::Unknown){
+                        println!("Clause {} is unsatisfied", c.id);
                         c.status = ClauseState::Unsatisfiable;
                     }
                 })
@@ -270,5 +292,117 @@ impl Problem{
             // otherwise => clause should be UNSAT
             else {assert!(c.status==ClauseState::Unsatisfiable);}
         });
+    }
+}
+
+// Returns true if all conflicts (if any) were successfully resolved. Returns false if
+// the problem is UNSAT (i.e., we have tried both the on- and off-assignment for
+// a variable but neither works). Since this is a recursive function, we want to
+// be notified if the compiler cannot apply tail-recursion optimization. 
+#[tailcall]
+pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStack) -> bool {
+    // do we even have an unsatiafiable clause? 
+    if let None = problem.list_of_clauses.iter()
+        .map(|rc|rc.borrow())
+        .find(|c|c.status==ClauseState::Unsatisfiable){
+            println!("no conflicts in the current solution stack");
+            return true;
+        };
+
+    // We do have a conflict. Backtrack!
+    // Find the last variable that we have not tried both polarities
+    let f_step_can_try_other_polarity = |step: &SolutionStep| -> bool{
+        if let SolutionStep::FreeChoice { has_tried_other_polarity, .. } = step{
+            !has_tried_other_polarity
+        } else {false}
+    };
+    let op_back_track_target = solution_stack.stack.iter().rfind(|step|f_step_can_try_other_polarity(step));
+
+    if op_back_track_target.is_none() {
+        println!("cannot find a solution");
+        return false;
+    } else {
+        let mut steps_to_drop: usize = 0;
+        solution_stack.stack.iter().rev()
+            .take_while(|step|!f_step_can_try_other_polarity(step))
+            .for_each(|step|{
+                steps_to_drop += 1;
+
+                // un-assign this variable
+                let var = match step {
+                    SolutionStep::FreeChoice { has_tried_other_polarity, assignment } => {assignment.variable},
+                    SolutionStep::ForcedChoice { assignment } => {assignment.variable},
+                };
+                println!("Dropping variable {:?}", var);
+
+                // update the list_of_variables
+                problem.list_of_variables.iter_mut()
+                    .filter(|(v,vs)|*v==var)
+                    .for_each(|(v,vs)|*vs = VariableState::Unassigned);
+
+                // update the list_of_literal_infos
+                problem.list_of_literal_infos.iter_mut()
+                    .filter(|li| li.literal.variable == var)
+                    .for_each(|li| {
+                        assert!(li.status != LiteralState::Unknown);
+                        li.status = LiteralState::Unknown;
+                    });
+            });
+
+        // drop that amount of elements
+        let stack_depth = solution_stack.stack.len();
+        assert!(stack_depth > steps_to_drop);
+        solution_stack.stack.truncate(stack_depth - steps_to_drop);
+        
+        // reverse the polarity of the last element in the current solution
+        // stack, and update list_of_variables and list_of_literal_infos
+        let mut last_step = solution_stack.stack.last_mut().unwrap();
+        if let SolutionStep::FreeChoice { has_tried_other_polarity, assignment } = last_step {
+            println!("Reversing polarity of assignment {:?}", assignment);
+
+            assignment.polarity = !assignment.polarity;
+            *has_tried_other_polarity = true;
+            
+            problem.list_of_literal_infos.iter_mut()
+                .filter(|li| li.literal.variable == assignment.variable)
+                .for_each(|li| {
+                    assert!(li.status != LiteralState::Unknown);
+                    if li.status == LiteralState::Sat{
+                        li.status = LiteralState::Unsat;
+                    } else {
+                        li.status = LiteralState::Sat;
+                    }
+                });
+        } else {panic!("last_step must not be forced choice");}
+        
+        // update the clause states
+        problem.list_of_clauses.iter()
+            .for_each(|rc|{
+                let mut c = (**rc).borrow_mut();
+                // we want to see if this clause becomes satisfied or
+                // unsatisfiable 
+                let clause_literal_states : Vec<LiteralState>
+                    = c.list_of_literals.iter().map(|l| {
+                        // query the list of literals for their states
+                        problem.list_of_literal_infos.iter().find(|li| *l == li.literal).map(|li| li.status).unwrap()
+                    }).collect();
+
+                // does the clause have at least one Sat? Or is it all
+                // Unsats?
+                if let Some(_) = clause_literal_states.iter().find(|s| **s==LiteralState::Sat) {
+                    c.status = ClauseState::Satisfied;
+                    println!("Clause {} is satisfied", c.id);
+                } else if let None = clause_literal_states.iter().find(|s| **s==LiteralState::Unknown){
+                    println!("Clause {} is unsatisfied", c.id);
+                    c.status = ClauseState::Unsatisfiable;
+                } else {
+                    println!("Clause {} is unresolved", c.id);
+                    c.status = ClauseState::Unresolved;
+                }
+            });
+        problem.panic_if_incoherent(&solution_stack);
+
+        // recursively call into this function to resolve any new conflicts
+        return resolve_conflict(problem, solution_stack);
     }
 }
