@@ -268,8 +268,11 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 let var = step.assignment.variable;
                 println!("Dropping variable {:?}", var);
 
-                // update the list_of_variables
-                *problem.list_of_variables.get_mut(&var).unwrap() = VariableState::Unassigned;
+                // Update the list_of_variables
+                // May panic in the unlikely event var does not exist in
+                // list_of_variables  
+                let vs_ref : &mut VariableState = problem.list_of_variables.get_mut(&var).unwrap();
+                *vs_ref = VariableState::Unassigned;
 
                 // update the list_of_literal_infos
                 if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
@@ -303,18 +306,18 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         last_step.assignment.polarity = !last_step.assignment.polarity;
         last_step.assignment_type = SolutionStepType::FreeChoiceSecondTry;
 
-        let var = &last_step.assignment.variable;
-        let new_pol = &last_step.assignment.polarity;
+        let var = last_step.assignment.variable;
+        let new_pol = last_step.assignment.polarity;
         if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
-            variable: *var,
-            polarity: *new_pol,
+            variable: var,
+            polarity: new_pol,
         }) {
             assert!(li.status != LiteralState::Unknown);
             li.status = LiteralState::Sat;
         }
         if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
-            variable: *var,
-            polarity: !*new_pol,
+            variable: var,
+            polarity: !new_pol,
         }) {
             assert!(li.status != LiteralState::Unknown);
             li.status = LiteralState::Unsat;

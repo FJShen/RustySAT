@@ -20,13 +20,13 @@ pub struct Variable {
     index: u32,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VariableState {
     Unassigned,
     Assigned,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Literal {
     variable: Variable,
     polarity: Polarity,
@@ -47,14 +47,14 @@ pub enum Polarity {
 
 static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
     id: u32,
     status: ClauseState,
     list_of_literals: Vec<Literal>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
 pub enum ClauseState {
     Satisfied,
     Unsatisfiable,
@@ -86,13 +86,14 @@ pub struct Assignment {
     polarity: Polarity,
 }
 
-//#[derive(Debug)]
+// we have custom impl of Debug
+#[derive(Clone, Copy)]
 pub struct SolutionStep {
     assignment: Assignment,
     assignment_type: SolutionStepType,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SolutionStepType {
     // we picked this variable at will and we haven't flipped its complement
     FreeChoiceFirstTry,
