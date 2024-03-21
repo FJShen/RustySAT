@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeSet;
 use tailcall::tailcall;
 
 // If the problem is UNSAT, we will not return anything but throw an exception.
@@ -255,7 +256,21 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         println!("cannot find a solution");
         return false;
     } else {
+        // 1. Un-mark the literals and variables touched any step that need to
+        //    be dropped
+        // 2. Drop those steps from the solution_stack
+        // 3. Flip the first step that we can flip, mark its literal/variable
+        // 4. Update (only) the clauses that are affected by steps 1 and 3
+
+        // Updated in step 1, used in step 2
         let mut steps_to_drop: usize = 0;
+
+        // Updated in step 1 and 3, used in step 4
+        // Both Rc and RefCell are compared by the values they contain, so
+        // different instances of Rc that point to the same RefCell<Clause> end
+        // up being "equal", so we avoid redundancy in the set.
+        let mut clauses_to_update = BTreeSet::<Rc<RefCell<Clause>>>::new();
+
         solution_stack
             .stack
             .iter()
@@ -270,8 +285,8 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
 
                 // Update the list_of_variables
                 // May panic in the unlikely event var does not exist in
-                // list_of_variables  
-                let vs_ref : &mut VariableState = problem.list_of_variables.get_mut(&var).unwrap();
+                // list_of_variables
+                let vs_ref: &mut VariableState = problem.list_of_variables.get_mut(&var).unwrap();
                 *vs_ref = VariableState::Unassigned;
 
                 // update the list_of_literal_infos
@@ -281,6 +296,14 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 }) {
                     assert!(li.status != LiteralState::Unknown);
                     li.status = LiteralState::Unknown;
+                    li.list_of_clauses.iter().for_each(|rc| {
+                        let _r = clauses_to_update.insert(Rc::clone(rc));
+                        println!(
+                            "Trying to add clause {} to set, was {} already there",
+                            (*rc).borrow().id,
+                            if _r { "not" } else { "" }
+                        );
+                    });
                 }
                 if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
                     variable: var,
@@ -288,6 +311,14 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 }) {
                     assert!(li.status != LiteralState::Unknown);
                     li.status = LiteralState::Unknown;
+                    li.list_of_clauses.iter().for_each(|rc| {
+                        let _r = clauses_to_update.insert(Rc::clone(rc));
+                        println!(
+                            "Trying to add clause {} to set, was {}already there",
+                            (*rc).borrow().id,
+                            if _r { "not " } else { "" }
+                        );
+                    });
                 }
             });
 
@@ -314,6 +345,14 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         }) {
             assert!(li.status != LiteralState::Unknown);
             li.status = LiteralState::Sat;
+            li.list_of_clauses.iter().for_each(|rc| {
+                let _r = clauses_to_update.insert(Rc::clone(rc));
+                println!(
+                    "Trying to add clause {} to set, was {}already there",
+                    (*rc).borrow().id,
+                    if _r { "not " } else { "" }
+                );
+            });
         }
         if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
             variable: var,
@@ -321,11 +360,20 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         }) {
             assert!(li.status != LiteralState::Unknown);
             li.status = LiteralState::Unsat;
+            li.list_of_clauses.iter().for_each(|rc| {
+                let _r = clauses_to_update.insert(Rc::clone(rc));
+                println!(
+                    "Trying to add clause {} to set, was {}already there",
+                    (*rc).borrow().id,
+                    if _r { "not " } else { "" }
+                );
+            });
         }
 
         // update the clause states
-        problem.list_of_clauses.iter().for_each(|rc| {
+        clauses_to_update.iter().for_each(|rc| {
             let mut c = (**rc).borrow_mut();
+            println!("Examining clause {}", c.id);
             // we want to see if this clause becomes satisfied or
             // unsatisfiable
             let clause_literal_states: Vec<LiteralState> = c
