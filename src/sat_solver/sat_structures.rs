@@ -37,6 +37,23 @@ impl fmt::Debug for Literal {
     }
 }
 
+impl Clause{
+    pub fn recalculate_clause_state(&self, problem: &Problem) -> ClauseState {
+        let mut encountered_unknown_state = false;
+
+        for l in &self.list_of_literals {
+            let ls = problem.list_of_literal_infos[l].status;
+            if ls == LiteralState::Sat {return ClauseState::Satisfied;}
+            else if ls == LiteralState::Unknown {encountered_unknown_state = true;}
+        }
+
+        match encountered_unknown_state {
+            true => ClauseState::Unresolved,
+            false => ClauseState::Unsatisfiable,
+        }
+    }
+}
+
 impl fmt::Debug for SolutionStep {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(

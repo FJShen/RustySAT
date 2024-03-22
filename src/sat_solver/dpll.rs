@@ -117,15 +117,8 @@ pub fn update_literal_info_and_clauses(problem: &mut Problem, v: Variable, p: Po
             let mut c = (**rc).borrow_mut();
             if c.status == ClauseState::Unresolved {
                 // are all literals of this clause UNSAT?
-                if !c
-                    .list_of_literals
-                    .iter()
-                    .map(|l| problem.list_of_literal_infos[l].status)
-                    .any(|ls| ls == LiteralState::Sat || ls == LiteralState::Unknown)
-                {
-                    c.status = ClauseState::Unsatisfiable;
-                    println!("Clause {} is unsatisfiable", c.id);
-                }
+                c.status = c.recalculate_clause_state(&problem);
+                assert!(c.status != ClauseState::Satisfied);
             }
         });
     }
@@ -204,23 +197,7 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
         .iter()
         .map(|rc| rc.borrow())
         .for_each(|c| {
-            let literal_states: Vec<LiteralState> = c
-                .list_of_literals
-                .iter()
-                .map(|l| problem.list_of_literal_infos[l].status)
-                .collect();
-            // exist one SAT => clause should be SAT
-            if literal_states.iter().any(|s| *s == LiteralState::Sat) {
-                assert!(c.status == ClauseState::Satisfied);
-            }
-            // else if exist one UNKNOWN => clause should be UNRESOLVED
-            else if literal_states.iter().any(|s| *s == LiteralState::Unknown) {
-                assert!(c.status == ClauseState::Unresolved);
-            }
-            // otherwise => clause should be UNSAT
-            else {
-                assert!(c.status == ClauseState::Unsatisfiable);
-            }
+            assert!(c.recalculate_clause_state(problem) == c.status);
         });
 }
 
@@ -376,31 +353,8 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
             println!("Examining clause {}", c.id);
             // we want to see if this clause becomes satisfied or
             // unsatisfiable
-            let clause_literal_states: Vec<LiteralState> = c
-                .list_of_literals
-                .iter()
-                .map(|l| {
-                    // query the list of literals for their states
-                    problem.list_of_literal_infos[l].status
-                })
-                .collect();
 
-            // does the clause have at least one Sat? Or is it all
-            // Unsats?
-            let mut new_status = ClauseState::Satisfied;
-            if clause_literal_states
-                .iter()
-                .any(|s| *s == LiteralState::Sat)
-            {
-                new_status = ClauseState::Satisfied;
-            } else if !clause_literal_states
-                .iter()
-                .any(|s| *s == LiteralState::Unknown)
-            {
-                new_status = ClauseState::Unsatisfiable;
-            } else {
-                new_status = ClauseState::Unresolved;
-            }
+            let new_status = c.recalculate_clause_state(problem);
 
             if new_status != c.status {
                 c.status = new_status;
