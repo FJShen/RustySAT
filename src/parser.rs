@@ -32,6 +32,9 @@ pub fn parse(filename: &String) -> Problem {
   // CLAUSE LOOP
   let mut clause_id : u32 = 0;
   for line in buffer.split("\n").map(|s| s.trim()) {
+    if line.starts_with("%") {
+      break;
+    }
     if line.starts_with("c") || line.starts_with("p") {
       continue;
     }
