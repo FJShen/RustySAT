@@ -69,7 +69,7 @@ pub struct LiteralInfo {
 
 #[derive(Debug)]
 pub struct Problem {
-    // The benefit of using BTreeMap instead of a BTreeMap: when debug-printing
+    // The benefit of using BTreeMap instead of a HashMap: when debug-printing
     // the contents of the former, entries are sorted in a human-friendly way.
     list_of_variables: BTreeMap<Variable, VariableState>,
     list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
