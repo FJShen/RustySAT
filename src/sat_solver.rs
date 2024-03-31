@@ -17,7 +17,7 @@ pub use sat_structures::get_sample_problem;
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Variable {
-    index: u32,
+    pub index: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,8 +28,8 @@ pub enum VariableState {
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Literal {
-    variable: Variable,
-    polarity: Polarity,
+    pub variable: Variable,
+    pub polarity: Polarity,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,9 +49,9 @@ static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
 
 #[derive(Debug,PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
-    id: u32,
-    status: ClauseState,
-    list_of_literals: Vec<Literal>,
+    pub id: u32,
+    pub status: ClauseState,
+    pub list_of_literals: Vec<Literal>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
@@ -63,17 +63,17 @@ pub enum ClauseState {
 
 #[derive(Debug)]
 pub struct LiteralInfo {
-    status: LiteralState,
-    list_of_clauses: Vec<Rc<RefCell<Clause>>>,
+    pub status: LiteralState,
+    pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
 }
 
 #[derive(Debug)]
 pub struct Problem {
     // The benefit of using BTreeMap instead of a HashMap: when debug-printing
     // the contents of the former, entries are sorted in a human-friendly way.
-    list_of_variables: BTreeMap<Variable, VariableState>,
-    list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
-    list_of_clauses: Vec<Rc<RefCell<Clause>>>,
+    pub list_of_variables: BTreeMap<Variable, VariableState>,
+    pub list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
+    pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
 }
 
 ////////////////////////////////////////////////////////
@@ -82,8 +82,8 @@ pub struct Problem {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Assignment {
-    variable: Variable,
-    polarity: Polarity,
+    pub variable: Variable,
+    pub polarity: Polarity,
 }
 
 // we have custom impl of Debug
