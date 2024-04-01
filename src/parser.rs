@@ -6,6 +6,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use crate::sat_solver::*;
 
 pub fn parse(filename: &String) -> Problem {
@@ -27,6 +28,7 @@ pub fn parse(filename: &String) -> Problem {
     list_of_variables: BTreeMap::<Variable, VariableState>::new(),
     list_of_literal_infos: BTreeMap::<Literal, LiteralInfo>::new(),
     list_of_clauses: Vec::<Rc::<RefCell::<Clause>>>::new(),
+    list_of_clauses_to_update: BTreeSet::new()
   };
 
   // CLAUSE LOOP

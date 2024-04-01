@@ -2,6 +2,7 @@ use core::fmt;
 use global_counter::primitive::exact::CounterU32;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 // impl of DPLL algorithm
@@ -74,6 +75,19 @@ pub struct Problem {
     pub list_of_variables: BTreeMap<Variable, VariableState>,
     pub list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
     pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
+
+    // This container contains (reference to) clauses that need to have their
+    // ClauseState recalculated. As an optimization, we do not recalculate the
+    // ClauseState immediately after a literal is assigned/unassigned/flipped.
+    //
+    // A clause can be added to this container when we (1) assign a new variable
+    // or (2) backtrack a past assignment.
+    // 
+    // One invariant holds: any Clause that "might" be in Unsatisfiable state
+    // must be in this container. I.e., if a clause is not in this container, it
+    // is certainly not Unsatisfiable. 
+    // Corollary: This list must be empty when the solver declares SAT. 
+    pub list_of_clauses_to_update: BTreeSet<Rc<RefCell<Clause>>>
 }
 
 ////////////////////////////////////////////////////////
