@@ -1,6 +1,7 @@
 use super::*;
 use std::collections::BTreeSet;
 use tailcall::tailcall;
+use log::{trace,info};
 
 // If the problem is UNSAT, we will return None
 pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
@@ -22,8 +23,8 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 
     while let Some((var, pol)) = get_one_unresolved_var(&p) {
         solution.push_free_choice_first_try(var, pol);
-        println!("dpll picking variable {:?}", var);
-        println!("solution stack: {:?}", solution);
+        trace!(target: "dpll", "picking variable {:?}", var);
+        trace!(target: "dpll", "solution stack: {:?}", solution);
 
         mark_variable_assigned(&mut p, var);
         update_literal_info_and_clauses(&mut p, var, pol);
@@ -37,7 +38,7 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
         }
     }
 
-    println!("all variables are assigned");
+    info!(target: "dpll", "all variables are assigned");
 
     Some(solution)
 }
@@ -102,7 +103,7 @@ pub fn update_literal_info_and_clauses(problem: &mut Problem, v: Variable, p: Po
             let mut c = (**rc).borrow_mut();
             if c.status == ClauseState::Unresolved {
                 c.status = ClauseState::Satisfied;
-                println!("Clause {} is satisfied", c.id);
+                trace!(target: "dpll", "Clause {} is satisfied", c.id);
             }
         });
     }
@@ -214,13 +215,13 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         .map(|rc| rc.borrow())
         .any(|c| c.status == ClauseState::Unsatisfiable)
     {
-        // println!("no conflicts in the current solution stack");
+        trace!(target: "backtrack", "no conflicts in the current solution stack");
         return true;
     };
 
     // We do have a conflict. Backtrack!
     // Find the last variable that we have not tried both polarities
-    println!("Trying to resolve conflict.");
+    trace!(target: "backtrack", "Trying to resolve conflict.");
     let f_step_can_try_other_polarity = |step: &SolutionStep| -> bool {
         matches!(step.assignment_type, SolutionStepType::FreeChoiceFirstTry)
     };
@@ -230,7 +231,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         .rfind(|step| f_step_can_try_other_polarity(step));
 
     if op_back_track_target.is_none() {
-        println!("cannot find a solution");
+        trace!(target: "backtrack", "cannot find a solution");
         return false;
     } else {
         // 1. Un-mark the literals and variables touched any step that need to
@@ -258,7 +259,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
 
                 // un-assign this variable
                 let var = step.assignment.variable;
-                println!("Dropping variable {:?}", var);
+                trace!(target: "backtrack", "Dropping variable {:?}", var);
 
                 // Update the list_of_variables
                 // May panic in the unlikely event var does not exist in
@@ -275,7 +276,8 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                     li.status = LiteralState::Unknown;
                     li.list_of_clauses.iter().for_each(|rc| {
                         let _r = clauses_to_update.insert(Rc::clone(rc));
-                        println!(
+                        trace!(
+                            target: "backtrack", 
                             "Trying to add clause {} to set, was {} already there",
                             (*rc).borrow().id,
                             if _r { "not" } else { "" }
@@ -290,7 +292,8 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                     li.status = LiteralState::Unknown;
                     li.list_of_clauses.iter().for_each(|rc| {
                         let _r = clauses_to_update.insert(Rc::clone(rc));
-                        println!(
+                        trace!(
+                            target: "backtrack", 
                             "Trying to add clause {} to set, was {}already there",
                             (*rc).borrow().id,
                             if _r { "not " } else { "" }
@@ -309,7 +312,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         // be modified.
         let last_step = solution_stack.stack.last_mut().unwrap();
         assert!(last_step.assignment_type == SolutionStepType::FreeChoiceFirstTry);
-        println!("Flipping variable {:?}", last_step.assignment.variable);
+        trace!(target: "backtrack", "Flipping variable {:?}", last_step.assignment.variable);
 
         last_step.assignment.polarity = !last_step.assignment.polarity;
         last_step.assignment_type = SolutionStepType::FreeChoiceSecondTry;
@@ -324,7 +327,8 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
             li.status = LiteralState::Sat;
             li.list_of_clauses.iter().for_each(|rc| {
                 let _r = clauses_to_update.insert(Rc::clone(rc));
-                println!(
+                trace!(
+                    target: "backtrack", 
                     "Trying to add clause {} to set, was {}already there",
                     (*rc).borrow().id,
                     if _r { "not " } else { "" }
@@ -339,7 +343,8 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
             li.status = LiteralState::Unsat;
             li.list_of_clauses.iter().for_each(|rc| {
                 let _r = clauses_to_update.insert(Rc::clone(rc));
-                println!(
+                trace!(
+                    target: "backtrack", 
                     "Trying to add clause {} to set, was {}already there",
                     (*rc).borrow().id,
                     if _r { "not " } else { "" }
@@ -350,7 +355,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         // update the clause states
         clauses_to_update.iter().for_each(|rc| {
             let mut c = (**rc).borrow_mut();
-            println!("Examining clause {}", c.id);
+            trace!(target: "backtrack", "Examining clause {}", c.id);
             // we want to see if this clause becomes satisfied or
             // unsatisfiable
 
@@ -363,10 +368,10 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                     ClauseState::Unsatisfiable => "unsatisfiable",
                     ClauseState::Unresolved => "unresolved",
                 };
-                println!("Clause {} becomes {}", c.id, s);
+                trace!(target: "backtrack", "Clause {} becomes {}", c.id, s);
             }
         });
-        println!("solution stack: {:?}", solution_stack);
+        trace!(target: "backtrack", "solution stack: {:?}", solution_stack);
         panic_if_incoherent(problem, solution_stack);
 
         // recursively call into this function to resolve any new conflicts

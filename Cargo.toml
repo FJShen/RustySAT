@@ -12,3 +12,5 @@ lto = true
 [dependencies]
 global_counter = "0.2.2"
 tailcall = "1.0.1"
+log = "0.4.21" 
+env_logger = "0.11.3"

@@ -1,10 +1,13 @@
 use std::env;
+use log::trace;
 
 mod parser;
 mod sat_solver;
 use crate::sat_solver::Problem;
 
 fn main() {
+    env_logger::init();
+    
     let args: Vec<String> = env::args().collect();
     if args.len() < 1 {
         panic!("Usage: cargo run <dimacs file>");
@@ -15,7 +18,7 @@ fn main() {
     ps.push(parser::parse(&args[1]));
 
     for p in ps {
-        println!("problem is: {:#?}", p);
+        trace!("problem is: {:#?}", p);
         let solution = sat_solver::dpll::dpll(p);
         if let Some(ss) = solution{
             println!("solution is {:?}", ss)
