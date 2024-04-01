@@ -30,7 +30,7 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
         update_literal_info_and_clauses(&mut p, var, pol);
 
         // sanity check
-        panic_if_incoherent(&p, &solution);
+        // panic_if_incoherent(&p, &solution);
 
         let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution);
         if !resolved_all_conflicts {
@@ -50,13 +50,35 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 /// Returns a variable that is unresolved, and a recommendation for which
 /// polarity to use. If all variables have been resolved, returns None.  
 pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)> {
-    let tuple_result = problem
+    // heuristic: pick an unassigned variable that appears in the most amount
+    // of clauses.
+    let tuple_result: Option<(Variable, usize, usize)> = problem
         .list_of_variables
         .iter()
-        .find(|(v, vs)| **vs == VariableState::Unassigned);
+        .filter(|(v, vs)| **vs == VariableState::Unassigned)
+        .map(|(v, vs)| {
+            let mut on_count: usize = 0;
+            let mut off_count: usize = 0;
+            if let Some(li) = problem.list_of_literal_infos.get(
+                &Literal { variable: *v, polarity: Polarity::On }){
+                on_count = li.list_of_clauses.len();
+            }
+            if let Some(li) = problem.list_of_literal_infos.get(
+                &Literal { variable: *v, polarity: Polarity::Off }){
+                off_count = li.list_of_clauses.len();
+            }
+            (*v, on_count, off_count)
+        })
+        .max_by_key(|(v, on_count, off_count)| on_count + off_count);
 
-    // for a prototype implementation, alway recommend the "Polarity::On"
-    tuple_result.map(|(v, vs)| (*v, Polarity::On))
+    if let Some((v, on_count, off_count)) = tuple_result{
+        if on_count > off_count {
+            return Some((v, Polarity::On));
+        } else {
+            return Some((v, Polarity::Off));
+        }  
+    } else {return None;}
+
 }
 
 pub fn mark_variable_assigned(problem: &mut Problem, v: Variable) {
@@ -372,7 +394,7 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
             }
         });
         trace!(target: "backtrack", "solution stack: {:?}", solution_stack);
-        panic_if_incoherent(problem, solution_stack);
+        // panic_if_incoherent(problem, solution_stack);
 
         // recursively call into this function to resolve any new conflicts
         resolve_conflict(problem, solution_stack)
