@@ -19,9 +19,11 @@ fn main() {
 
     for p in ps {
         trace!("problem is: {:#?}", p);
-        let solution = sat_solver::dpll::dpll(p);
-        if let Some(ss) = solution{
-            println!("solution is {:?}", ss)
+        let result = sat_solver::dpll::dpll(p);
+        if let Some(solution) = result{
+            println!("SAT: solution is {:?}", solution);
+        } else {
+            println!("UNSAT");
         }
     }
 }
