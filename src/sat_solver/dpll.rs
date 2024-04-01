@@ -2,8 +2,8 @@ use super::*;
 use std::collections::BTreeSet;
 use tailcall::tailcall;
 
-// If the problem is UNSAT, we will not return anything but throw an exception.
-pub fn dpll(mut p: Problem) -> SolutionStack {
+// If the problem is UNSAT, we will return None
+pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
     let mut solution = SolutionStack { stack: vec![] };
 
     // Baseline DPLL
@@ -33,13 +33,13 @@ pub fn dpll(mut p: Problem) -> SolutionStack {
 
         let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution);
         if !resolved_all_conflicts {
-            panic!("UNSAT");
+            return None;
         }
     }
 
     println!("all variables are assigned");
 
-    solution
+    Some(solution)
 }
 
 ////////////////////////////////////////////////////////
