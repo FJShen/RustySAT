@@ -18,7 +18,7 @@ fn main() {
     ps.push(parser::parse(&args[1]));
 
     for p in ps {
-        trace!("problem is: {:#?}", p);
+        trace!(target: "parser", "problem is: {:#?}", p);
         let result = sat_solver::dpll::dpll(p);
         if let Some(solution) = result{
             println!("SAT: solution is {:?}", solution);

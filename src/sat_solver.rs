@@ -94,27 +94,29 @@ pub struct Problem {
 // Data structures for the SAT Solution
 ////////////////////////////////////////////////////////
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Assignment {
     pub variable: Variable,
     pub polarity: Polarity,
 }
 
 // we have custom impl of Debug
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SolutionStep {
     assignment: Assignment,
     assignment_type: SolutionStepType,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum SolutionStepType {
     // we picked this variable at will and we haven't flipped its complement
     FreeChoiceFirstTry,
     // we have flipped this assignment's polarity during a backtrack
     FreeChoiceSecondTry,
     // forced due to BCP
-    ForcedChoice,
+    ForcedAtBCP,
+    // forced due to it belonging to a unit clause
+    ForcedAtInit
 }
 
 #[derive(Debug)]

@@ -8,6 +8,8 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
     let mut solution = SolutionStack { stack: vec![] };
 
     // Baseline DPLL
+    // 0. Pre-process the problem
+    // 0.1 Identify Unit Clauses and force assign their literals
     // 1. Pick a variable to assign
     // 1.1 Pick a variable
     // 1.2 Pick a polarity
@@ -20,6 +22,9 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
     // 3. Resolve conflicts if any clause is unsatisfiable.
     // 4. Repeat
     // Resolve all variables before we return a solution
+
+    let ret = force_assignment_for_unit_clauses(&mut p, &mut solution);
+    if !ret {return None;}
 
     while let Some((var, pol)) = get_one_unresolved_var(&p) {
         solution.push_free_choice_first_try(var, pol);
@@ -46,6 +51,75 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 ////////////////////////////////////////////////////////
 // Routines for the SAT Algorithm
 ////////////////////////////////////////////////////////
+
+/// Called once right after reading the problem from file. Aims to identify unit
+/// clauses and give them an assignment. 
+/// This is function is necessary because the two-watch-variable algorithm used
+/// for BCP requires each clause to have at least two variables.  
+/// Returns true if no conflict occur during the call
+pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut SolutionStack) -> bool{
+    // Go over all clauses, hunt for those that have only one literal
+    let it_literals_to_force = problem.list_of_clauses
+        .iter()
+        .filter(|rc|rc.borrow().list_of_literals.len() == 1)
+        .map(|rc|rc.borrow().list_of_literals[0]);
+
+    let mut _temp_set = BTreeSet::<SolutionStep>::new();
+    let mut ret = true;
+    for l in it_literals_to_force{
+        let v = l.variable;
+        let p = l.polarity;
+
+        // update and also check that the literal hasn't been assigned with
+        // opposite polarity 
+        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal{
+            variable: v,
+            polarity: p,
+        }){
+            if li.status == LiteralState::Unsat {ret = false; break;}
+            
+            li.status = LiteralState::Sat;
+        }
+
+        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal{
+            variable: v,
+            polarity: !p,
+        }){
+            if li.status == LiteralState::Sat {ret = false; break;}
+            
+            li.status = LiteralState::Unsat;
+        }
+
+        // push the assignment to the solution stack
+        let step = SolutionStep {
+            assignment: Assignment {
+                variable: v,
+                polarity: p,
+            },
+            assignment_type: SolutionStepType::ForcedAtInit,
+        };
+        _temp_set.insert(step);
+    };
+
+    // Pop unique assignments from the step, insert into the stack
+    _temp_set.iter().for_each(|s|{
+        solution.stack.push(*s);
+        let v = s.assignment.variable;
+        mark_variable_assigned(problem, v);
+    });
+
+    match ret{
+        true => {
+            info!(target: "dpll", "Force-assignment of literals for unit clauses successful");
+            info!(target: "dpll", "Solution stack is {:?}", solution);
+        }
+        false => {
+            info!(target: "dpll", "Force-assignment of literals for unit clauses failed");
+        }
+    };
+
+    return ret;
+}
 
 /// Returns a variable that is unresolved, and a recommendation for which
 /// polarity to use. If all variables have been resolved, returns None.  

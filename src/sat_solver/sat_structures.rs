@@ -62,7 +62,8 @@ impl fmt::Debug for SolutionStep {
             match self.assignment_type {
                 SolutionStepType::FreeChoiceFirstTry => "t",
                 SolutionStepType::FreeChoiceSecondTry => "T",
-                SolutionStepType::ForcedChoice => "x",
+                SolutionStepType::ForcedAtBCP => "x",
+                SolutionStepType::ForcedAtInit => "I"
             }
         )?;
         write!(f, "{}", self.assignment.variable.index)?;
