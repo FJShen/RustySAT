@@ -44,7 +44,7 @@ pub fn parse(filename: &String) -> Problem {
       circuit.list_of_clauses.push(Rc::new(RefCell::new(
         Clause {
           id: clause_id as u32,
-          status: ClauseState::Unresolved,
+          // status: ClauseState::Unresolved,
           list_of_literals: Vec::<Literal>::new(),
         }
       )));

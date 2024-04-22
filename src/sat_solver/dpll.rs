@@ -184,9 +184,9 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity) {
         li.status = LiteralState::Sat;
 
         // For the SAT literal, it guarantees to make a clause Satisfied.
-        li.list_of_clauses.iter().for_each(|rc| {
-            rc.borrow_mut().status = ClauseState::Satisfied;
-        });
+        // li.list_of_clauses.iter().for_each(|rc| {
+        //     rc.borrow_mut().status = ClauseState::Satisfied;
+        // });
     }
     
     // opposite polarity: becomes Unsat
@@ -203,9 +203,9 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity) {
         // For the UNSAT literal, it has the potential of changing a clause's
         // state. 
         li.list_of_clauses.iter().for_each(|rc| {
-            if rc.borrow().status != ClauseState::Satisfied {
-                problem.list_of_clauses_to_update.insert(Rc::clone(rc));    
-            }
+            // if rc.borrow().status != ClauseState::Satisfied {
+            problem.list_of_clauses_to_update.insert(Rc::clone(rc));    
+            // }
         });
     }
 }
@@ -283,7 +283,7 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
         .iter()
         .map(|rc| rc.borrow())
         .for_each(|c| {
-            assert!(c.recalculate_clause_state(problem) == c.status);
+            // assert!(c.recalculate_clause_state(problem) == c.status);
         });
 }
 
@@ -305,17 +305,14 @@ pub fn udpate_clause_state_and_resolve_conflict(
         // unsatisfiable
         let new_status = c.recalculate_clause_state(problem);
 
-        if new_status != c.status {
-            c.status = new_status;
-            let s = match c.status {
-                ClauseState::Satisfied => "satisfied",
-                ClauseState::Unsatisfiable => "unsatisfiable",
-                ClauseState::Unresolved => "unresolved",
-            };
-            trace!(target: "backtrack", "Clause {} becomes {}", c.id, s);
-        }
+        let s = match new_status {
+            ClauseState::Satisfied => "satisfied",
+            ClauseState::Unsatisfiable => "unsatisfiable",
+            ClauseState::Unresolved => "unresolved",
+        };
+        trace!(target: "backtrack", "Clause {} becomes {}", c.id, s);
 
-        if c.status == ClauseState::Unsatisfiable {
+        if new_status == ClauseState::Unsatisfiable {
             // One unsat clause is enough, we have to keep backtracking
             // Carry-on the remaining list of clauses to update to the
             // following recursive call. Also put rc back. 
@@ -380,13 +377,13 @@ pub fn udpate_clause_state_and_resolve_conflict(
                     assert!(li.status != LiteralState::Unknown);
                     li.status = LiteralState::Unknown;
                     li.list_of_clauses.iter().for_each(|rc| {
-                        let _r = problem.list_of_clauses_to_update.insert(Rc::clone(rc));
-                        trace!(
-                            target: "backtrack", 
-                            "Trying to add clause {} to set, was {} already there",
-                            (*rc).borrow().id,
-                            if _r { "not" } else { "" }
-                        );
+                        // let _r = problem.list_of_clauses_to_update.insert(Rc::clone(rc));
+                        // trace!(
+                        //     target: "backtrack", 
+                        //     "Trying to add clause {} to set, was {} already there",
+                        //     (*rc).borrow().id,
+                        //     if _r { "not" } else { "" }
+                        // );
                     });
                 }
                 if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
@@ -396,13 +393,13 @@ pub fn udpate_clause_state_and_resolve_conflict(
                     assert!(li.status != LiteralState::Unknown);
                     li.status = LiteralState::Unknown;
                     li.list_of_clauses.iter().for_each(|rc| {
-                        let _r = problem.list_of_clauses_to_update.insert(Rc::clone(rc));
-                        trace!(
-                            target: "backtrack", 
-                            "Trying to add clause {} to set, was {}already there",
-                            (*rc).borrow().id,
-                            if _r { "not " } else { "" }
-                        );
+                        // let _r = problem.list_of_clauses_to_update.insert(Rc::clone(rc));
+                        // trace!(
+                        //     target: "backtrack", 
+                        //     "Trying to add clause {} to set, was {}already there",
+                        //     (*rc).borrow().id,
+                        //     if _r { "not " } else { "" }
+                        // );
                     });
                 }
             });
@@ -432,7 +429,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
             li.status = LiteralState::Sat;
             li.list_of_clauses.iter().for_each(|rc| {
                 // the clause becomes satisfied
-                rc.borrow_mut().status = ClauseState::Satisfied;
+                //rc.borrow_mut().status = ClauseState::Satisfied;
                 let _r = problem.list_of_clauses_to_update.remove(rc);
                 trace!(
                     target: "backtrack", 

@@ -51,7 +51,7 @@ static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
 #[derive(Debug,PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
     pub id: u32,
-    pub status: ClauseState,
+    // pub status: ClauseState,
     pub list_of_literals: Vec<Literal>,
 }
 

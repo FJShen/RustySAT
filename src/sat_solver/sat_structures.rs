@@ -109,7 +109,7 @@ pub fn get_sample_problem() -> Problem {
                     polarity: Polarity::On,
                 },
             ],
-            status: ClauseState::Unresolved,
+            // status: ClauseState::Unresolved,
         })),
         Rc::new(RefCell::new(Clause {
             id: CLAUSE_COUNTER.inc(),
@@ -123,7 +123,7 @@ pub fn get_sample_problem() -> Problem {
                     polarity: Polarity::Off,
                 },
             ],
-            status: ClauseState::Unresolved,
+            // status: ClauseState::Unresolved,
         })),
         Rc::new(RefCell::new(Clause {
             id: CLAUSE_COUNTER.inc(),
@@ -137,7 +137,7 @@ pub fn get_sample_problem() -> Problem {
                     polarity: Polarity::Off,
                 },
             ],
-            status: ClauseState::Unresolved,
+            // status: ClauseState::Unresolved,
         })),
     ];
 
