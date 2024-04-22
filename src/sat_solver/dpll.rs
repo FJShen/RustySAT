@@ -87,7 +87,12 @@ pub fn mark_variable_assigned(problem: &mut Problem, v: Variable) {
     *vs = VariableState::Assigned;
 }
 
-/// Returns a list of clauses to be updated (need to recalculate clause state).
+/// Updates LiteralInfo for the affected literals, also updates clauses that are
+/// affected by this assignment: 
+/// (1) A ClauseState is eagerly updated if the assignment satisfied the clause
+/// (2) A ClauseState does not need to be updated if it's already Satisfied
+/// (3) A ClauseState is update-postponed (added to list_of_clauses_to_update) in
+/// other cases
 pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity) {
     // for both literals (on and off),
     // - update their state from Unknown to Sat/Unsat
@@ -103,7 +108,13 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity) {
             "literal must not be Sat/Unsat"
         );
         li.status = LiteralState::Sat;
+
+        // For the SAT literal, it guarantees to make a clause Satisfied.
+        li.list_of_clauses.iter().for_each(|rc| {
+            rc.borrow_mut().status = ClauseState::Satisfied;
+        });
     }
+    
     // opposite polarity: becomes Unsat
     if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
         variable: v,
@@ -114,25 +125,13 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity) {
             "literal must not be Sat/Unsat"
         );
         li.status = LiteralState::Unsat;
-    }
-
-    // For the SAT literal, it guarantee to make a clause Satisfied.
-    if let Some(li) = problem.list_of_literal_infos.get(&Literal {
-        variable: v,
-        polarity: p,
-    }) {
+        
+        // For the UNSAT literal, it has the potential of changing a clause's
+        // state. 
         li.list_of_clauses.iter().for_each(|rc| {
-            rc.borrow_mut().status = ClauseState::Satisfied;
-        });
-    }
-
-    // For the UNSAT literal, it has the potential of changing a clause's state.
-    if let Some(li) = problem.list_of_literal_infos.get(&Literal {
-        variable: v,
-        polarity: !p,
-    }) {
-        li.list_of_clauses.iter().for_each(|rc| {
-            problem.list_of_clauses_to_update.insert(Rc::clone(rc));
+            if rc.borrow().status != ClauseState::Satisfied {
+                problem.list_of_clauses_to_update.insert(Rc::clone(rc));    
+            }
         });
     }
 }
@@ -272,19 +271,14 @@ pub fn udpate_clause_state_and_resolve_conflict(
         trace!(target: "backtrack", "cannot find a solution");
         return false;
     } else {
-        // 1. Un-mark the literals and variables touched any step that need to
-        //    be dropped
+        // 1. Un-mark the literals and variables touched by any step that need to
+        //    be dropped, and add the affected clauses to list_of_clauses_to_update
         // 2. Drop those steps from the solution_stack
-        // 3. Flip the first step that we can flip, mark its literal/variable
-        // 4. Update (only) the clauses that are affected by steps 1 and 3
+        // 3. Flip the first step that we can flip, mark its literal/variable,
+        //    and add affected clauses to list_of_clauses_to_update
 
         // Updated in step 1, used in step 2
         let mut steps_to_drop: usize = 0;
-
-        // Updated in step 1 and 3, used in step 4
-        // Both Rc and RefCell are compared by the values they contain, so
-        // different instances of Rc that point to the same RefCell<Clause> end
-        // up being "equal", so we avoid redundancy in the set.
 
         solution_stack
             .stack
@@ -363,13 +357,14 @@ pub fn udpate_clause_state_and_resolve_conflict(
             assert!(li.status != LiteralState::Unknown);
             li.status = LiteralState::Sat;
             li.list_of_clauses.iter().for_each(|rc| {
-                let _r = problem.list_of_clauses_to_update.insert(Rc::clone(rc));
+                // the clause becomes satisfied
+                rc.borrow_mut().status = ClauseState::Satisfied;
+                let _r = problem.list_of_clauses_to_update.remove(rc);
                 trace!(
                     target: "backtrack", 
-                    "Trying to add clause {} to set, was {}already there",
-                    (*rc).borrow().id,
-                    if _r { "not " } else { "" }
-                );
+                    "Clause {} becomes satisfied",
+                    (*rc).borrow().id
+                );                
             });
         }
         if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
