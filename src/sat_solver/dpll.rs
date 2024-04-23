@@ -84,7 +84,6 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
         .filter(|rc|rc.borrow().list_of_literals.len() == 1)
         .map(|rc|rc.borrow().list_of_literals[0]);
 
-    let mut _temp_set = BTreeSet::<SolutionStep>::new();
     let mut _temp_assignment_map = BTreeMap::<Variable,Polarity>::new();
     let mut ret = true;
     for l in it_literals_to_force{
@@ -275,24 +274,26 @@ pub fn boolean_constant_propagation(
                     return false;
                 }
                 BCPSubstituteWatchLiteralResult::ForcedAssignment{l} => {
-                    match implied_assignments.get(&l.variable) {
-                        Some(p) => {
+                    let mut conflict=false;
+
+                    implied_assignments.entry(l.variable)
+                        .and_modify({|p| // we aren't really modifying anything
                             if *p != l.polarity {
                                 // conflict!
                                 trace!(target: "bcp", "Clause {}: Variable {:?} implied to be both polarities", c.id, l.variable);
                                 trace!(target: "bcp", "{:?}", c);
-                                return false;
+                                conflict =true;
                             } else {
                                 trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
                                 trace!(target: "bcp", "{:?}", c);
                             }
-                        } 
-                        None => {
-                            implied_assignments.insert(l.variable, l.polarity);
+                        })
+                        .or_insert({
                             trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
                             trace!(target: "bcp", "{:?}", c);
-                        }
-                    }
+                            l.polarity
+                        });
+                    if conflict {return false;}
                 }
                 _ => {}
             }
