@@ -67,8 +67,17 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 /// clauses and give them an assignment. 
 /// This is function is necessary because the two-watch-variable algorithm used
 /// for BCP requires each clause to have at least two variables.  
-/// Returns true if no conflict occur during the call
+/// Returns true if no conflict occur during the call. 
+/// 
+/// Overview
+/// 1. Scan all clauses to hunt for unit clauses 
+/// 1.1 Take note of variables and polarities to force-assign
+/// 1.2 Make sure no variable is forced to be both On and Off
+/// 2. Assign one variable at a time, performing BCP and conflict resolution
+///    along the way
+/// 2.1 This step is much like how freely-assigned variables are handled.  
 pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut SolutionStack) -> bool{
+
     // Go over all clauses, hunt for those that have only one literal
     let it_literals_to_force = problem.list_of_clauses
         .iter()
@@ -241,7 +250,7 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
     }
 }
 
-/// Called after assigning a free variable, or performing a backtrack. 
+/// Called after assigning a variable, or performing a backtrack. 
 /// Returns true if no more implications can be made; returns false if a
 /// variable is implied to be both On and Off. 
 pub fn boolean_constant_propagation(
@@ -308,8 +317,7 @@ pub fn boolean_constant_propagation(
 
 /// Returns true if all conflicts (if any) were successfully resolved. Returns false if
 /// the problem is UNSAT (i.e., we have tried both the on- and off-assignment for
-/// a variable but neither works). Since this is a recursive function, we want to
-/// be notified if the compiler cannot apply tail-recursion optimization.
+/// a variable but neither works).
 #[tailcall]
 pub fn udpate_clause_state_and_resolve_conflict(
     problem: &mut Problem, 
@@ -427,39 +435,6 @@ pub fn udpate_clause_state_and_resolve_conflict(
 
         let var = last_step.assignment.variable;
         let new_pol = last_step.assignment.polarity;
-        // if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
-        //     variable: var,
-        //     polarity: new_pol,
-        // }) {
-        //     assert!(li.status == LiteralState::Unsat);
-        //     li.status = LiteralState::Sat;
-        //     if log_enabled!(target: "backtrack", log::Level::Trace){
-        //         li.list_of_clauses.iter().for_each(|rc| {
-        //             trace!(
-        //                 target: "backtrack", 
-        //                 "Clause {} becomes satisfied",
-        //                 (*rc).borrow().id
-        //             );                
-        //         });                
-        //     }
-        // }
-        
-        // if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
-        //     variable: var,
-        //     polarity: !new_pol,
-        // }) {
-        //     assert!(li.status == LiteralState::Sat);
-        //     li.status = LiteralState::Unsat;
-        //     li.list_of_clauses.iter().for_each(|rc| {
-        //         let _r = problem.list_of_clauses_to_check.insert(Rc::clone(rc));
-        //         trace!(
-        //             target: "backtrack", 
-        //             "Trying to add clause {} to set, was {}already there",
-        //             (*rc).borrow().id,
-        //             if _r { "not " } else { "" }
-        //         );
-        //     });
-        // }
 
         update_literal_info(problem, var, new_pol, UpdateLiteralInfoCause::Backtrack);
 
@@ -475,7 +450,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
     }
 }
 
-
+/// Obsolete
 /// Sanity check solely for debug purpose. Does there exist incoherence in the
 /// representation? If so, panic!
 pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
