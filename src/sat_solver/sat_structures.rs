@@ -164,7 +164,7 @@ pub fn get_sample_problem() -> Problem {
         list_of_variables: _list_of_variables,
         list_of_literal_infos: _list_of_literal_infos,
         list_of_clauses: _list_of_clauses,
-        list_of_clauses_to_update: BTreeSet::new()
+        list_of_clauses_to_check: BTreeSet::new()
     }
 }
 

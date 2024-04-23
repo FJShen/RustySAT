@@ -28,7 +28,7 @@ pub fn parse(filename: &String) -> Problem {
     list_of_variables: BTreeMap::<Variable, VariableState>::new(),
     list_of_literal_infos: BTreeMap::<Literal, LiteralInfo>::new(),
     list_of_clauses: Vec::<Rc::<RefCell::<Clause>>>::new(),
-    list_of_clauses_to_update: BTreeSet::new()
+    list_of_clauses_to_check: BTreeSet::new()
   };
 
   // CLAUSE LOOP

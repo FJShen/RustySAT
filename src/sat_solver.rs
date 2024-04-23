@@ -77,7 +77,7 @@ pub struct Problem {
     pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
 
     // This container contains (reference to) clauses that need to have their
-    // ClauseState recalculated. As an optimization, we do not recalculate the
+    // ClauseState checked. As an optimization, we do not calculate the
     // ClauseState immediately after a literal is assigned/unassigned/flipped.
     //
     // A clause can be added to this container when we (1) assign a new variable
@@ -87,7 +87,7 @@ pub struct Problem {
     // must be in this container. I.e., if a clause is not in this container, it
     // is certainly not Unsatisfiable. 
     // Corollary: This list must be empty when the solver declares SAT. 
-    pub list_of_clauses_to_update: BTreeSet<Rc<RefCell<Clause>>>
+    pub list_of_clauses_to_check: BTreeSet<Rc<RefCell<Clause>>>
 }
 
 ////////////////////////////////////////////////////////
