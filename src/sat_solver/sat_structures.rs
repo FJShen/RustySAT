@@ -86,7 +86,13 @@ impl Clause{
             }
             None => {
                 let other_index = 1 - watch_index;
-                return BCPSubstituteWatchLiteralResult::ForcedAssignment { l: self.watch_literals[other_index] };
+                let other_literal = self.watch_literals[other_index];
+                match problem.list_of_literal_infos[&other_literal].status {
+                    LiteralState::Sat => {return BCPSubstituteWatchLiteralResult::ClauseIsSAT;}
+                    LiteralState::Unknown => {return BCPSubstituteWatchLiteralResult::ForcedAssignment { l:other_literal };}
+                    LiteralState::Unsat => {panic!("Other watch variable is Unsat");}
+                }
+                
             }
         }
     }

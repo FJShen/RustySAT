@@ -36,11 +36,21 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 
         // sanity check
         // panic_if_incoherent(&p, &solution);
-
-        let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution);
-        if !resolved_all_conflicts {
-            return None;
+        if USE_BCP{
+            while !boolean_constant_propagation(&mut p, &mut solution) {
+                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution);
+                if !resolved_all_conflicts {
+                    return None;
+                } 
+            }
+        } else {
+            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution);
+            if !resolved_all_conflicts {
+                return None;
+            }            
         }
+
+
     }
 
     info!(target: "dpll", "all variables are assigned");
@@ -256,6 +266,8 @@ pub fn boolean_constant_propagation(
                             // conflict!
                             trace!(target: "bcp", "Variable {:?} implied to be both polarities", l.variable);
                             return false;
+                        } else {
+                            trace!(target: "bcp", "Variable {:?} implied to be {:?}", l.variable, l.polarity);
                         }
                     } 
                     None => {
@@ -269,13 +281,13 @@ pub fn boolean_constant_propagation(
         // At this point, we have finished examining all clauses affected by a
         // literal assignment, but we end up with a list of more implied assignments.   
         // We try those implied assignments one at a time. 
-        if let Some((v, p)) = implied_assignments.first_key_value() {
-            solution.push_step(*v, *p, SolutionStepType::ForcedAtBCP);
-            trace!(target: "bcp", "picking variable {:?}", *v);
+        if let Some((v, p)) = implied_assignments.pop_first() {
+            solution.push_step(v, p, SolutionStepType::ForcedAtBCP);
+            trace!(target: "bcp", "picking variable {:?}", v);
             trace!(target: "bcp", "solution stack: {:?}", solution);
 
-            mark_variable_assigned(problem, *v);
-            update_literal_info(problem, *v, *p, UpdateLiteralInfoCause::BCPImplication); // adds clauses to list_of_clauses_to_check
+            mark_variable_assigned(problem, v);
+            update_literal_info(problem, v, p, UpdateLiteralInfoCause::BCPImplication); // adds clauses to list_of_clauses_to_check
         }
     }
 
@@ -292,33 +304,35 @@ pub fn udpate_clause_state_and_resolve_conflict(
     problem: &mut Problem, 
     solution_stack: &mut SolutionStack
 ) -> bool {
-    // do we even have an unsatiafiable clause?
-    let mut found_unsat = false;
-    while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
-        let mut c = rc.borrow_mut();
-        trace!(target: "backtrack", "Examining clause {}", c.id);
+    if !USE_BCP{
+        // do we even have an unsatiafiable clause?
+        let mut found_unsat = false;
+        while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
+            let mut c = rc.borrow_mut();
+            trace!(target: "backtrack", "Examining clause {}", c.id);
 
-        // we want to see if this clause becomes satisfied or
-        // unsatisfiable
-        let new_status = c.recalculate_clause_state(problem);
+            // we want to see if this clause becomes satisfied or
+            // unsatisfiable
+            let new_status = c.recalculate_clause_state(problem);
 
-        let s = match new_status {
-            ClauseState::Satisfied => "satisfied",
-            ClauseState::Unsatisfiable => "unsatisfiable",
-            ClauseState::Unresolved => "unresolved",
-        };
-        trace!(target: "backtrack", "Clause {} becomes {}", c.id, s);
+            let s = match new_status {
+                ClauseState::Satisfied => "satisfied",
+                ClauseState::Unsatisfiable => "unsatisfiable",
+                ClauseState::Unresolved => "unresolved",
+            };
+            trace!(target: "backtrack", "Clause {} becomes {}", c.id, s);
 
-        if new_status == ClauseState::Unsatisfiable {
-            // One unsat clause is enough, we have to keep backtracking
-            found_unsat = true;
-            break;
+            if new_status == ClauseState::Unsatisfiable {
+                // One unsat clause is enough, we have to keep backtracking
+                found_unsat = true;
+                break;
+            }
         }
-    }
 
-    if !found_unsat {
-        trace!(target: "backtrack", "All conflicts resolved.");
-        return true;
+        if !found_unsat {
+            trace!(target: "backtrack", "All conflicts resolved.");
+            return true;
+        }        
     }
 
     // We do have a conflict. Backtrack!
@@ -440,6 +454,10 @@ pub fn udpate_clause_state_and_resolve_conflict(
 
         trace!(target: "backtrack", "solution stack: {:?}", solution_stack);
         // panic_if_incoherent(problem, solution_stack);
+
+        if USE_BCP {
+            return true;
+        }
 
         // recursively call into this function to resolve any new conflicts
         return udpate_clause_state_and_resolve_conflict(problem, solution_stack);

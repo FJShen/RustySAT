@@ -12,7 +12,7 @@ pub mod dpll;
 mod sat_structures;
 // pub use sat_structures::get_sample_problem;
 
-static USE_BCP: bool = false;
+static USE_BCP: bool = true;
 
 ////////////////////////////////////////////////////////
 // Data structures for the SAT Problem
@@ -75,6 +75,7 @@ pub struct LiteralInfo {
 
 pub enum BCPSubstituteWatchLiteralResult{
     FoundSubstitute,
+    ClauseIsSAT,
     ForcedAssignment{l: Literal}
 }
 
