@@ -46,7 +46,7 @@ pub fn parse(filename: &String) -> Problem {
           id: clause_id as u32,
           // status: ClauseState::Unresolved,
           list_of_literals: Vec::<Literal>::new(),
-          watch_variables: [NULL_VARIABLE; 2],
+          watch_literals: [NULL_LITERAL; 2],
         }
       )));
     }
@@ -85,7 +85,7 @@ pub fn parse(filename: &String) -> Problem {
         });
       let mut clause = (**current_clause).borrow_mut();
       clause.list_of_literals.push(literal);
-      clause.watch_variables[clause_lit_count%2] = literal.variable;
+      clause.watch_literals[clause_lit_count%2] = literal;
     }
   }
 

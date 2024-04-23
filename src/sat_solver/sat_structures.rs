@@ -52,6 +52,44 @@ impl Clause{
             false => ClauseState::Unsatisfiable,
         }
     }
+
+    pub fn hits_watch_literals(&self, l: Literal) -> bool {
+        if self.watch_literals[0] != l && self.watch_literals[1] != l {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    /// Precondition: one (and only one) of the watch literals of this clause is UNSAT
+    /// Postcondition: if retuning FoundSubstitute, the UNSAT watch literal is
+    /// substituted with an Unknown-state literal; if returning ForcedAssignment, nothing is changed.
+    pub fn try_substitute_watch_literal(&mut self, problem: &Problem) -> BCPSubstituteWatchLiteralResult {
+        let watch_index;
+        if problem.list_of_literal_infos[&self.watch_literals[0]].status == LiteralState::Unsat {
+            watch_index = 0;
+        } else if problem.list_of_literal_infos[&self.watch_literals[1]].status == LiteralState::Unsat {
+            watch_index = 1;
+        } else {
+            panic!("none of the watch literals of clause {:?} is UNSAT", self);
+        }
+
+        let substitute_literal = self.list_of_literals
+            .iter()
+            .filter(|l| !self.hits_watch_literals(**l))
+            .find(|l| problem.list_of_variables[&l.variable] == VariableState::Unassigned);
+
+        match substitute_literal {
+            Some(l) => {
+                self.watch_literals[watch_index] = *l; 
+                return BCPSubstituteWatchLiteralResult::FoundSubstitute;
+            }
+            None => {
+                let other_index = 1 - watch_index;
+                return BCPSubstituteWatchLiteralResult::ForcedAssignment { l: self.watch_literals[other_index] };
+            }
+        }
+    }
 }
 
 impl fmt::Debug for SolutionStep {
@@ -79,107 +117,111 @@ impl fmt::Debug for SolutionStep {
 }
 
 // hard-code a SAT problem so I can try the baseline DPLL algorithm.
-pub fn get_sample_problem() -> Problem {
-    // f = (a + b + c) (a' + b') (b + c')
-    // one example solution: a=1, b=0, c=0
-    let v_a = Variable { index: 0 };
-    let v_b = Variable { index: 1 };
-    let v_c = Variable { index: 2 };
+// pub fn get_sample_problem() -> Problem {
+//     // f = (a + b + c) (a' + b') (b + c')
+//     // one example solution: a=1, b=0, c=0
+//     let v_a = Variable { index: 0 };
+//     let v_b = Variable { index: 1 };
+//     let v_c = Variable { index: 2 };
 
-    let mut _list_of_variables = BTreeMap::from([
-        (v_a, VariableState::Unassigned),
-        (v_b, VariableState::Unassigned),
-        (v_c, VariableState::Unassigned),
-    ]);
+//     let mut _list_of_variables = BTreeMap::from([
+//         (v_a, VariableState::Unassigned),
+//         (v_b, VariableState::Unassigned),
+//         (v_c, VariableState::Unassigned),
+//     ]);
 
-    let mut _list_of_clauses = vec![
-        Rc::new(RefCell::new(Clause {
-            id: CLAUSE_COUNTER.inc(),
-            list_of_literals: vec![
-                Literal {
-                    variable: v_a,
-                    polarity: Polarity::On,
-                },
-                Literal {
-                    variable: v_b,
-                    polarity: Polarity::On,
-                },
-                Literal {
-                    variable: v_c,
-                    polarity: Polarity::On,
-                },
-            ],
-            // status: ClauseState::Unresolved,
-            watch_variables: [v_a, v_b],
-        })),
-        Rc::new(RefCell::new(Clause {
-            id: CLAUSE_COUNTER.inc(),
-            list_of_literals: vec![
-                Literal {
-                    variable: v_a,
-                    polarity: Polarity::Off,
-                },
-                Literal {
-                    variable: v_b,
-                    polarity: Polarity::Off,
-                },
-            ],
-            // status: ClauseState::Unresolved,
-            watch_variables: [v_a, v_b],
-        })),
-        Rc::new(RefCell::new(Clause {
-            id: CLAUSE_COUNTER.inc(),
-            list_of_literals: vec![
-                Literal {
-                    variable: v_b,
-                    polarity: Polarity::On,
-                },
-                Literal {
-                    variable: v_c,
-                    polarity: Polarity::Off,
-                },
-            ],
-            // status: ClauseState::Unresolved,
-            watch_variables: [v_c, v_b],
-        })),
-    ];
+//     let mut _list_of_clauses = vec![
+//         Rc::new(RefCell::new(Clause {
+//             id: CLAUSE_COUNTER.inc(),
+//             list_of_literals: vec![
+//                 Literal {
+//                     variable: v_a,
+//                     polarity: Polarity::On,
+//                 },
+//                 Literal {
+//                     variable: v_b,
+//                     polarity: Polarity::On,
+//                 },
+//                 Literal {
+//                     variable: v_c,
+//                     polarity: Polarity::On,
+//                 },
+//             ],
+//             // status: ClauseState::Unresolved,
+//             watch_variables: [v_a, v_b],
+//         })),
+//         Rc::new(RefCell::new(Clause {
+//             id: CLAUSE_COUNTER.inc(),
+//             list_of_literals: vec![
+//                 Literal {
+//                     variable: v_a,
+//                     polarity: Polarity::Off,
+//                 },
+//                 Literal {
+//                     variable: v_b,
+//                     polarity: Polarity::Off,
+//                 },
+//             ],
+//             // status: ClauseState::Unresolved,
+//             watch_variables: [v_a, v_b],
+//         })),
+//         Rc::new(RefCell::new(Clause {
+//             id: CLAUSE_COUNTER.inc(),
+//             list_of_literals: vec![
+//                 Literal {
+//                     variable: v_b,
+//                     polarity: Polarity::On,
+//                 },
+//                 Literal {
+//                     variable: v_c,
+//                     polarity: Polarity::Off,
+//                 },
+//             ],
+//             // status: ClauseState::Unresolved,
+//             watch_variables: [v_c, v_b],
+//         })),
+//     ];
 
-    // To populate the list for LiteralInfo:
-    // Create one LiteralInfo for each literal.
-    // Then iterate over the clauses: for each literal in a clause, update its
-    // entry.
-    let mut _list_of_literal_infos: BTreeMap<Literal, LiteralInfo> = BTreeMap::new();
-    for c in &_list_of_clauses {
-        for l in &(**c).borrow().list_of_literals {
-            _list_of_literal_infos
-                .entry(l.clone())
-                .and_modify(|e| e.list_of_clauses.push(Rc::clone(c)))
-                .or_insert(LiteralInfo {
-                    list_of_clauses: vec![Rc::clone(c)],
-                    status: LiteralState::Unknown,
-                });
-        }
-    }
+//     // To populate the list for LiteralInfo:
+//     // Create one LiteralInfo for each literal.
+//     // Then iterate over the clauses: for each literal in a clause, update its
+//     // entry.
+//     let mut _list_of_literal_infos: BTreeMap<Literal, LiteralInfo> = BTreeMap::new();
+//     for c in &_list_of_clauses {
+//         for l in &(**c).borrow().list_of_literals {
+//             _list_of_literal_infos
+//                 .entry(l.clone())
+//                 .and_modify(|e| e.list_of_clauses.push(Rc::clone(c)))
+//                 .or_insert(LiteralInfo {
+//                     list_of_clauses: vec![Rc::clone(c)],
+//                     status: LiteralState::Unknown,
+//                 });
+//         }
+//     }
 
-    // println!("After the loop, list_of_literal_infos is: {:#?}", _list_of_literal_infos);
+//     // println!("After the loop, list_of_literal_infos is: {:#?}", _list_of_literal_infos);
 
-    Problem {
-        list_of_variables: _list_of_variables,
-        list_of_literal_infos: _list_of_literal_infos,
-        list_of_clauses: _list_of_clauses,
-        list_of_clauses_to_check: BTreeSet::new()
-    }
-}
+//     Problem {
+//         list_of_variables: _list_of_variables,
+//         list_of_literal_infos: _list_of_literal_infos,
+//         list_of_clauses: _list_of_clauses,
+//         list_of_clauses_to_check: BTreeSet::new()
+//     }
+// }
 
 impl SolutionStack {
     pub fn push_free_choice_first_try(&mut self, var: Variable, pol: Polarity) {
+        self.push_step(var, pol, SolutionStepType::FreeChoiceFirstTry);
+    }
+
+    pub fn push_step(&mut self, var: Variable, pol: Polarity, ass_type: SolutionStepType){
         let step = SolutionStep {
             assignment: Assignment {
                 variable: var,
                 polarity: pol,
             },
-            assignment_type: SolutionStepType::FreeChoiceFirstTry,
+            assignment_type: ass_type,
         };
-        self.stack.push(step);
+        self.stack.push(step);        
     }
 }

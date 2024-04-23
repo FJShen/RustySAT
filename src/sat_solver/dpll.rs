@@ -32,7 +32,7 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
         trace!(target: "dpll", "solution stack: {:?}", solution);
 
         mark_variable_assigned(&mut p, var);
-        update_literal_info(&mut p, var, pol);
+        update_literal_info(&mut p, var, pol, UpdateLiteralInfoCause::FreeAssignment);
 
         // sanity check
         // panic_if_incoherent(&p, &solution);
@@ -167,43 +167,120 @@ pub fn mark_variable_unassigned(problem: &mut Problem, v: Variable) {
     *vs = VariableState::Unassigned;
 }
 
+pub enum UpdateLiteralInfoCause{
+    FreeAssignment,
+    Backtrack,
+    BCPImplication
+}
+
 /// Updates LiteralInfo for the affected literals; if this assignment has the
 /// possibility of making a Clause UNSAT, add the Clause to
 /// list_of_clauses_to_check .
-pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity) {
+pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, cause: UpdateLiteralInfoCause) {
     // for both literals (on and off),
     // - update their state from Unknown to Sat/Unsat
     // - and update their Clauses' status
 
     // same polarity: becomes Satisfied
-    if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
+    let same_pol_literal = Literal {
         variable: v,
         polarity: p,
-    }) {
-        assert!(
-            li.status == LiteralState::Unknown,
-            "literal must not be Sat/Unsat"
-        );
+    };
+    if let Some(li) = problem.list_of_literal_infos.get_mut(&same_pol_literal) {
+        match cause {
+            UpdateLiteralInfoCause::FreeAssignment |
+            UpdateLiteralInfoCause::BCPImplication => {
+                assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+            },
+            UpdateLiteralInfoCause::Backtrack => {
+                assert!(li.status == LiteralState::Unsat, "literal must not be Unknown/Sat");
+            },
+        }
         li.status = LiteralState::Sat;
     }
     
     // opposite polarity: becomes Unsat
-    if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
+    let opposite_pol_literal = Literal {
         variable: v,
         polarity: !p,
-    }) {
-        assert!(
-            li.status == LiteralState::Unknown,
-            "literal must not be Sat/Unsat"
-        );
+    };
+    if let Some(li) = problem.list_of_literal_infos.get_mut(&opposite_pol_literal) {
+        match cause {
+            UpdateLiteralInfoCause::FreeAssignment |
+            UpdateLiteralInfoCause::BCPImplication => {
+                assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+            },
+            UpdateLiteralInfoCause::Backtrack => {
+                assert!(li.status == LiteralState::Sat, "literal must not be Unknown/Unsat");
+            },
+        }
         li.status = LiteralState::Unsat;
         
         // For the UNSAT literal, it has the potential of changing a clause's
         // state. 
         li.list_of_clauses.iter().for_each(|rc| {
-            problem.list_of_clauses_to_check.insert(Rc::clone(rc));  
+            if USE_BCP {
+                if rc.borrow().hits_watch_literals(opposite_pol_literal) {
+                    problem.list_of_clauses_to_check.insert(Rc::clone(rc)); 
+                }
+            } else {
+                problem.list_of_clauses_to_check.insert(Rc::clone(rc));  
+            }
         });
     }
+}
+
+/// Called after assigning a free variable, or performing a backtrack. 
+/// Returns true if no more implications can be made; returns false if a
+/// variable is implied to be both On and Off. 
+//#[tailcall]  
+pub fn boolean_constant_propagation(
+    problem: &mut Problem,
+    solution: &mut SolutionStack
+) -> bool {
+    let mut implied_assignments = BTreeMap::<Variable, Polarity>::new();
+
+    while problem.list_of_clauses_to_check.len() > 0 || implied_assignments.len() > 0 {
+
+        // Examine each clause, we either find a substitute variable to watch, or
+        // are forced to assign the other watch variable.
+        while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
+            let mut c = rc.borrow_mut();
+            trace!(target: "bcp", "Examining clause {}", c.id);
+
+            let substitution_result = c.try_substitute_watch_literal(problem);
+            if let BCPSubstituteWatchLiteralResult::ForcedAssignment{l} = substitution_result {
+                match implied_assignments.get(&l.variable) {
+                    Some(p) => {
+                        if *p != l.polarity {
+                            // conflict!
+                            trace!(target: "bcp", "Variable {:?} implied to be both polarities", l.variable);
+                            return false;
+                        }
+                    } 
+                    None => {
+                        implied_assignments.insert(l.variable, l.polarity);
+                        trace!(target: "bcp", "Variable {:?} implied to be {:?}", l.variable, l.polarity);
+                    }
+                }
+            }
+        }
+
+        // At this point, we have finished examining all clauses affected by a
+        // literal assignment, but we end up with a list of more implied assignments.   
+        // We try those implied assignments one at a time. 
+        if let Some((v, p)) = implied_assignments.first_key_value() {
+            solution.push_step(*v, *p, SolutionStepType::ForcedAtBCP);
+            trace!(target: "bcp", "picking variable {:?}", *v);
+            trace!(target: "bcp", "solution stack: {:?}", solution);
+
+            mark_variable_assigned(problem, *v);
+            update_literal_info(problem, *v, *p, UpdateLiteralInfoCause::BCPImplication); // adds clauses to list_of_clauses_to_check
+        }
+    }
+
+
+    return true;
 }
 
 /// Returns true if all conflicts (if any) were successfully resolved. Returns false if
@@ -315,7 +392,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
 
         // Reverse the polarity of the last element in the current solution
         // stack, and update list_of_literal_infos and list_of_clauses_to_check.
-        // list_of_variables need not be modified.
+        // However, list_of_variables need not be modified.
         let last_step = solution_stack.stack.last_mut().unwrap();
         assert!(last_step.assignment_type == SolutionStepType::FreeChoiceFirstTry);
         trace!(target: "backtrack", "Flipping variable {:?}", last_step.assignment.variable);
@@ -325,39 +402,41 @@ pub fn udpate_clause_state_and_resolve_conflict(
 
         let var = last_step.assignment.variable;
         let new_pol = last_step.assignment.polarity;
-        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
-            variable: var,
-            polarity: new_pol,
-        }) {
-            assert!(li.status == LiteralState::Unsat);
-            li.status = LiteralState::Sat;
-            if log_enabled!(target: "backtrack", log::Level::Trace){
-                li.list_of_clauses.iter().for_each(|rc| {
-                    trace!(
-                        target: "backtrack", 
-                        "Clause {} becomes satisfied",
-                        (*rc).borrow().id
-                    );                
-                });                
-            }
-        }
+        // if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
+        //     variable: var,
+        //     polarity: new_pol,
+        // }) {
+        //     assert!(li.status == LiteralState::Unsat);
+        //     li.status = LiteralState::Sat;
+        //     if log_enabled!(target: "backtrack", log::Level::Trace){
+        //         li.list_of_clauses.iter().for_each(|rc| {
+        //             trace!(
+        //                 target: "backtrack", 
+        //                 "Clause {} becomes satisfied",
+        //                 (*rc).borrow().id
+        //             );                
+        //         });                
+        //     }
+        // }
         
-        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
-            variable: var,
-            polarity: !new_pol,
-        }) {
-            assert!(li.status == LiteralState::Sat);
-            li.status = LiteralState::Unsat;
-            li.list_of_clauses.iter().for_each(|rc| {
-                let _r = problem.list_of_clauses_to_check.insert(Rc::clone(rc));
-                trace!(
-                    target: "backtrack", 
-                    "Trying to add clause {} to set, was {}already there",
-                    (*rc).borrow().id,
-                    if _r { "not " } else { "" }
-                );
-            });
-        }
+        // if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
+        //     variable: var,
+        //     polarity: !new_pol,
+        // }) {
+        //     assert!(li.status == LiteralState::Sat);
+        //     li.status = LiteralState::Unsat;
+        //     li.list_of_clauses.iter().for_each(|rc| {
+        //         let _r = problem.list_of_clauses_to_check.insert(Rc::clone(rc));
+        //         trace!(
+        //             target: "backtrack", 
+        //             "Trying to add clause {} to set, was {}already there",
+        //             (*rc).borrow().id,
+        //             if _r { "not " } else { "" }
+        //         );
+        //     });
+        // }
+
+        update_literal_info(problem, var, new_pol, UpdateLiteralInfoCause::Backtrack);
 
         trace!(target: "backtrack", "solution stack: {:?}", solution_stack);
         // panic_if_incoherent(problem, solution_stack);

@@ -10,12 +10,15 @@ pub mod dpll;
 
 // impl of data structure methods
 mod sat_structures;
-pub use sat_structures::get_sample_problem;
+// pub use sat_structures::get_sample_problem;
+
+static USE_BCP: bool = false;
 
 ////////////////////////////////////////////////////////
 // Data structures for the SAT Problem
 ////////////////////////////////////////////////////////
 pub static NULL_VARIABLE: Variable = Variable{index: 0};
+pub static NULL_LITERAL: Literal = Literal{variable: NULL_VARIABLE, polarity: Polarity::Off};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Variable {
@@ -54,7 +57,7 @@ pub struct Clause {
     pub id: u32,
     // pub status: ClauseState,
     pub list_of_literals: Vec<Literal>,
-    pub watch_variables: [Variable; 2],
+    pub watch_literals: [Literal; 2],
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
@@ -68,6 +71,11 @@ pub enum ClauseState {
 pub struct LiteralInfo {
     pub status: LiteralState,
     pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
+}
+
+pub enum BCPSubstituteWatchLiteralResult{
+    FoundSubstitute,
+    ForcedAssignment{l: Literal}
 }
 
 #[derive(Debug)]
@@ -89,7 +97,7 @@ pub struct Problem {
     // must be in this container. I.e., if a clause is not in this container, it
     // is certainly not Unsatisfiable. 
     // Corollary: This list must be empty when the solver declares SAT. 
-    pub list_of_clauses_to_check: BTreeSet<Rc<RefCell<Clause>>>
+    pub list_of_clauses_to_check: BTreeSet<Rc<RefCell<Clause>>>,
 }
 
 ////////////////////////////////////////////////////////
