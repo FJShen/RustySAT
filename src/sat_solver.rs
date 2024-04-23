@@ -76,6 +76,7 @@ pub struct LiteralInfo {
 pub enum BCPSubstituteWatchLiteralResult{
     FoundSubstitute,
     ClauseIsSAT,
+    UnitClauseUnsat,
     ForcedAssignment{l: Literal}
 }
 

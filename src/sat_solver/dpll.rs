@@ -25,6 +25,7 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 
     let ret = force_assignment_for_unit_clauses(&mut p, &mut solution);
     if !ret {return None;}
+    trace!(target: "dpll", "solution stack: {:?}", solution);
 
     while let Some((var, pol)) = get_one_unresolved_var(&p) {
         solution.push_free_choice_first_try(var, pol);
@@ -75,60 +76,57 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
         .map(|rc|rc.borrow().list_of_literals[0]);
 
     let mut _temp_set = BTreeSet::<SolutionStep>::new();
+    let mut _temp_assignment_map = BTreeMap::<Variable,Polarity>::new();
     let mut ret = true;
     for l in it_literals_to_force{
-        let v = l.variable;
-        let p = l.polarity;
+        let this_v = l.variable;
+        let this_p = l.polarity;
 
-        // update and also check that the literal hasn't been assigned with
-        // opposite polarity 
-        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal{
-            variable: v,
-            polarity: p,
-        }){
-            if li.status == LiteralState::Unsat {ret = false; break;}
-            
-            li.status = LiteralState::Sat;
-        }
-
-        if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal{
-            variable: v,
-            polarity: !p,
-        }){
-            if li.status == LiteralState::Sat {ret = false; break;}
-            
-            li.status = LiteralState::Unsat;
-        }
-
-        // push the assignment to the solution stack
-        let step = SolutionStep {
-            assignment: Assignment {
-                variable: v,
-                polarity: p,
-            },
-            assignment_type: SolutionStepType::ForcedAtInit,
-        };
-        _temp_set.insert(step);
-    };
-
-    // Pop unique assignments from the step, insert into the stack
-    _temp_set.iter().for_each(|s|{
-        solution.stack.push(*s);
-        let v = s.assignment.variable;
-        mark_variable_assigned(problem, v);
-    });
-
-    match ret{
-        true => {
-            info!(target: "dpll", "Force-assignment of literals for unit clauses successful");
-            info!(target: "dpll", "Solution stack is {:?}", solution);
-        }
-        false => {
-            info!(target: "dpll", "Force-assignment of literals for unit clauses failed");
+        match _temp_assignment_map.get(&this_v) {
+            Some(p) => {
+                if *p != this_p {
+                    // conflict!
+                    trace!(target: "unit_clause", "Variable {:?} appeared with both polarities in various unit clauses", this_v);
+                    ret = false;
+                    break;
+                } 
+            } 
+            None => {
+                _temp_assignment_map.insert(this_v, this_p);
+                trace!(target: "unit_clause", "Variable {:?} implied to be {:?}", this_v, this_p);
+            }
         }
     };
 
-    return ret;
+    if !ret {return false;}
+
+    while let Some((ass_v, ass_p)) = _temp_assignment_map.pop_first(){
+        solution.push_step(ass_v, ass_p, SolutionStepType::ForcedAtInit);
+
+        trace!(target: "unit_clause", "Assinging variable {:?}", ass_v);
+        trace!(target: "unit_clause", "solution stack: {:?}", solution);
+        
+        mark_variable_assigned(problem, ass_v);
+        update_literal_info(problem, ass_v, ass_p, UpdateLiteralInfoCause::UnitClauseImplication);
+        
+        if USE_BCP{
+            while !boolean_constant_propagation(problem, solution) {
+                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution);
+                if !resolved_all_conflicts {
+                    return false;
+                } 
+            }
+            trace!(target: "bcp", "No more implications");
+        } else {
+            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution);
+            if !resolved_all_conflicts {
+                return false;
+            }            
+            trace!(target: "dpll", "All conflicts cleared.")
+        }
+    }
+
+    return true;
 }
 
 /// Returns a variable that is unresolved, and a recommendation for which
@@ -180,7 +178,8 @@ pub fn mark_variable_unassigned(problem: &mut Problem, v: Variable) {
 pub enum UpdateLiteralInfoCause{
     FreeAssignment,
     Backtrack,
-    BCPImplication
+    BCPImplication,
+    UnitClauseImplication
 }
 
 /// Updates LiteralInfo for the affected literals; if this assignment has the
@@ -199,7 +198,8 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
     if let Some(li) = problem.list_of_literal_infos.get_mut(&same_pol_literal) {
         match cause {
             UpdateLiteralInfoCause::FreeAssignment |
-            UpdateLiteralInfoCause::BCPImplication => {
+            UpdateLiteralInfoCause::BCPImplication |
+            UpdateLiteralInfoCause::UnitClauseImplication => {
                 assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
             },
             UpdateLiteralInfoCause::Backtrack => {
@@ -217,7 +217,8 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
     if let Some(li) = problem.list_of_literal_infos.get_mut(&opposite_pol_literal) {
         match cause {
             UpdateLiteralInfoCause::FreeAssignment |
-            UpdateLiteralInfoCause::BCPImplication => {
+            UpdateLiteralInfoCause::BCPImplication |
+            UpdateLiteralInfoCause::UnitClauseImplication => {
                 assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
             },
             UpdateLiteralInfoCause::Backtrack => {
@@ -258,26 +259,33 @@ pub fn boolean_constant_propagation(
             //trace!(target: "bcp", "Examining clause {}", c.id);
 
             let substitution_result = c.try_substitute_watch_literal(problem);
-            if let BCPSubstituteWatchLiteralResult::ForcedAssignment{l} = substitution_result {
-                //trace!(target: "bcp", "{:?}", c);
-                match implied_assignments.get(&l.variable) {
-                    Some(p) => {
-                        if *p != l.polarity {
-                            // conflict!
-                            trace!(target: "bcp", "Clause {}: Variable {:?} implied to be both polarities", c.id, l.variable);
-                            trace!(target: "bcp", "{:?}", c);
-                            return false;
-                        } else {
+            match substitution_result {
+                BCPSubstituteWatchLiteralResult::UnitClauseUnsat => {
+                    trace!(target:"bcp", "Clause {} is unit clause and UNSAT", c.id);
+                    trace!(target: "bcp", "{:?}", c);
+                    return false;
+                }
+                BCPSubstituteWatchLiteralResult::ForcedAssignment{l} => {
+                    match implied_assignments.get(&l.variable) {
+                        Some(p) => {
+                            if *p != l.polarity {
+                                // conflict!
+                                trace!(target: "bcp", "Clause {}: Variable {:?} implied to be both polarities", c.id, l.variable);
+                                trace!(target: "bcp", "{:?}", c);
+                                return false;
+                            } else {
+                                trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
+                                trace!(target: "bcp", "{:?}", c);
+                            }
+                        } 
+                        None => {
+                            implied_assignments.insert(l.variable, l.polarity);
                             trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
                             trace!(target: "bcp", "{:?}", c);
                         }
-                    } 
-                    None => {
-                        implied_assignments.insert(l.variable, l.polarity);
-                        trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
-                        trace!(target: "bcp", "{:?}", c);
                     }
                 }
+                _ => {}
             }
         }
 

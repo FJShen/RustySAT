@@ -121,7 +121,11 @@ impl Clause{
             None => {
                 let other_index = 1 - watch_index;
                 let other_literal = self.watch_literals[other_index];
-                return BCPSubstituteWatchLiteralResult::ForcedAssignment { l:other_literal };
+                if other_literal == NULL_LITERAL {
+                    return BCPSubstituteWatchLiteralResult::UnitClauseUnsat;
+                } else {
+                    return BCPSubstituteWatchLiteralResult::ForcedAssignment { l:other_literal };
+                }
             }
         }
     }
