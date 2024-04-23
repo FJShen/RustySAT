@@ -1,4 +1,4 @@
-use std::borrow::{Borrow, BorrowMut};
+use crate::vsids::*;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use crate::sat_solver::*;
 
-pub fn parse(filename: &String) -> Problem {
+pub fn parse(filename: &String, vsids: &mut VSIDS) -> Problem {
   let path = Path::new(filename);
   let display = path.display();
 
@@ -42,11 +42,14 @@ pub fn parse(filename: &String) -> Problem {
       circuit.list_of_clauses.push(Rc::new(RefCell::new(
         Clause {
           id: clause_id as u32,
-          status: ClauseState::Unresolved,
           list_of_literals: Vec::<Literal>::new(),
+          status: ClauseState::Unresolved,
         }
       )));
     }
+
+    let current_clause = circuit.list_of_clauses.last().unwrap();
+
     // LITERAL LOOP
     for literal_str in line.split_whitespace() {
       let literal_val : i32 = match literal_str.parse() {
@@ -69,7 +72,6 @@ pub fn parse(filename: &String) -> Problem {
         variable: variable,
         polarity: if literal_val > 0 {Polarity::On} else {Polarity::Off},
       };
-      let current_clause = circuit.list_of_clauses.last().unwrap();
       circuit.list_of_literal_infos
         .entry(literal.clone())
         .and_modify(|e| e.list_of_clauses.push(Rc::clone(current_clause)))
@@ -77,8 +79,9 @@ pub fn parse(filename: &String) -> Problem {
           list_of_clauses: vec![Rc::clone(current_clause)],
           status: LiteralState::Unknown,
         });
-      let _ = &(**current_clause).borrow_mut().list_of_literals.push(literal);
+      _ = &(**current_clause).borrow_mut().list_of_literals.push(literal);
     }
+    vsids.add_clause(&(**current_clause).borrow());
   }
 
   circuit
