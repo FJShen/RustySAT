@@ -46,10 +46,12 @@ pub fn parse(filename: &String) -> Problem {
           id: clause_id as u32,
           // status: ClauseState::Unresolved,
           list_of_literals: Vec::<Literal>::new(),
+          watch_variables: [NULL_VARIABLE; 2],
         }
       )));
     }
     // LITERAL LOOP
+    let mut clause_lit_count = 0;
     for literal_str in line.split_whitespace() {
       let literal_val : i32 = match literal_str.parse() {
           Ok(val) => val,
@@ -59,8 +61,10 @@ pub fn parse(filename: &String) -> Problem {
         clause_id += 1;
         continue;
       }
+      clause_lit_count += 1;
 
       // register new variable
+      assert!(literal_val!=0, "Variable index must be non-zero, because zero is for NULL_VARIABLE, we got {}", literal_val);
       let variable = Variable {
         index: literal_val.abs() as u32,
       };
@@ -79,7 +83,9 @@ pub fn parse(filename: &String) -> Problem {
           list_of_clauses: vec![Rc::clone(current_clause)],
           status: LiteralState::Unknown,
         });
-      let _ = &(**current_clause).borrow_mut().list_of_literals.push(literal);
+      let mut clause = (**current_clause).borrow_mut();
+      clause.list_of_literals.push(literal);
+      clause.watch_variables[clause_lit_count%2] = literal.variable;
     }
   }
 

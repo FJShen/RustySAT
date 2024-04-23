@@ -110,6 +110,7 @@ pub fn get_sample_problem() -> Problem {
                 },
             ],
             // status: ClauseState::Unresolved,
+            watch_variables: [v_a, v_b],
         })),
         Rc::new(RefCell::new(Clause {
             id: CLAUSE_COUNTER.inc(),
@@ -124,6 +125,7 @@ pub fn get_sample_problem() -> Problem {
                 },
             ],
             // status: ClauseState::Unresolved,
+            watch_variables: [v_a, v_b],
         })),
         Rc::new(RefCell::new(Clause {
             id: CLAUSE_COUNTER.inc(),
@@ -138,6 +140,7 @@ pub fn get_sample_problem() -> Problem {
                 },
             ],
             // status: ClauseState::Unresolved,
+            watch_variables: [v_c, v_b],
         })),
     ];
 

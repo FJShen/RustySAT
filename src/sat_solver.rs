@@ -15,6 +15,7 @@ pub use sat_structures::get_sample_problem;
 ////////////////////////////////////////////////////////
 // Data structures for the SAT Problem
 ////////////////////////////////////////////////////////
+pub static NULL_VARIABLE: Variable = Variable{index: 0};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Variable {
@@ -53,6 +54,7 @@ pub struct Clause {
     pub id: u32,
     // pub status: ClauseState,
     pub list_of_literals: Vec<Literal>,
+    pub watch_variables: [Variable; 2],
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, PartialOrd, Ord)]
