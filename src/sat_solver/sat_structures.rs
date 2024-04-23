@@ -65,14 +65,48 @@ impl Clause{
     /// Postcondition: if retuning FoundSubstitute, the UNSAT watch literal is
     /// substituted with an Unknown-state literal; if returning ForcedAssignment, nothing is changed.
     pub fn try_substitute_watch_literal(&mut self, problem: &Problem) -> BCPSubstituteWatchLiteralResult {
+        // Examine if the clause is already SAT (a not-watched literal is SAT),
+        // also examine the two watch literals
+        let mut already_sat= false;
+        let (mut status_0, mut status_1) =  (LiteralState::Unknown, LiteralState::Unknown);
+
+        self.list_of_literals
+            .iter()
+            .for_each(|l| {
+                let l_status = problem.list_of_literal_infos[l].status;
+                if l_status == LiteralState::Sat {already_sat = true;}
+                if &self.watch_literals[0] == l {
+                    status_0 = l_status;
+                } else if &self.watch_literals[1] == l {
+                    status_1 = l_status;
+                }
+            });
+        
+        if already_sat {return BCPSubstituteWatchLiteralResult::ClauseIsSAT;}
+
+        // which watch literal became UNSAT?
         let watch_index;
-        if problem.list_of_literal_infos[&self.watch_literals[0]].status == LiteralState::Unsat {
-            watch_index = 0;
-        } else if problem.list_of_literal_infos[&self.watch_literals[1]].status == LiteralState::Unsat {
-            watch_index = 1;
-        } else {
-            panic!("none of the watch literals of clause {:?} is UNSAT", self);
+
+        match (status_0, status_1) {
+            (LiteralState::Unsat, LiteralState::Unknown) => watch_index = 0,
+            (LiteralState::Unknown, LiteralState::Unsat) => watch_index = 1,
+            (LiteralState::Sat, _) |
+            (_, LiteralState::Sat) => {return BCPSubstituteWatchLiteralResult::ClauseIsSAT;}
+            (LiteralState::Unknown, LiteralState::Unknown) => {
+                panic!("both of the watch literals of clause {:?} are unassigned, why are you trying to find a substitute literal to watch?", self);
+            }
+            (LiteralState::Unsat, LiteralState::Unsat) => {
+                panic!("both of the watch literals of clause {:?} are unsat", self);
+            }
         }
+
+        // if problem.list_of_literal_infos[&self.watch_literals[0]].status == LiteralState::Unsat {
+        //     watch_index = 0;
+        // } else if problem.list_of_literal_infos[&self.watch_literals[1]].status == LiteralState::Unsat {
+        //     watch_index = 1;
+        // } else {
+        //     panic!("none of the watch literals of clause {:?} is UNSAT", self);
+        // }
 
         let substitute_literal = self.list_of_literals
             .iter()
@@ -87,12 +121,7 @@ impl Clause{
             None => {
                 let other_index = 1 - watch_index;
                 let other_literal = self.watch_literals[other_index];
-                match problem.list_of_literal_infos[&other_literal].status {
-                    LiteralState::Sat => {return BCPSubstituteWatchLiteralResult::ClauseIsSAT;}
-                    LiteralState::Unknown => {return BCPSubstituteWatchLiteralResult::ForcedAssignment { l:other_literal };}
-                    LiteralState::Unsat => {panic!("Other watch variable is Unsat");}
-                }
-                
+                return BCPSubstituteWatchLiteralResult::ForcedAssignment { l:other_literal };
             }
         }
     }

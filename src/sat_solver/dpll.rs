@@ -28,7 +28,7 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 
     while let Some((var, pol)) = get_one_unresolved_var(&p) {
         solution.push_free_choice_first_try(var, pol);
-        trace!(target: "dpll", "picking variable {:?}", var);
+        trace!(target: "dpll", "Assigning variable {:?}", var);
         trace!(target: "dpll", "solution stack: {:?}", solution);
 
         mark_variable_assigned(&mut p, var);
@@ -43,14 +43,14 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
                     return None;
                 } 
             }
+            trace!(target: "bcp", "No more implications");
         } else {
             let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution);
             if !resolved_all_conflicts {
                 return None;
             }            
+            trace!(target: "dpll", "All conflicts cleared.")
         }
-
-
     }
 
     info!(target: "dpll", "all variables are assigned");
@@ -243,7 +243,6 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
 /// Called after assigning a free variable, or performing a backtrack. 
 /// Returns true if no more implications can be made; returns false if a
 /// variable is implied to be both On and Off. 
-//#[tailcall]  
 pub fn boolean_constant_propagation(
     problem: &mut Problem,
     solution: &mut SolutionStack
@@ -256,23 +255,27 @@ pub fn boolean_constant_propagation(
         // are forced to assign the other watch variable.
         while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
             let mut c = rc.borrow_mut();
-            trace!(target: "bcp", "Examining clause {}", c.id);
+            //trace!(target: "bcp", "Examining clause {}", c.id);
 
             let substitution_result = c.try_substitute_watch_literal(problem);
             if let BCPSubstituteWatchLiteralResult::ForcedAssignment{l} = substitution_result {
+                //trace!(target: "bcp", "{:?}", c);
                 match implied_assignments.get(&l.variable) {
                     Some(p) => {
                         if *p != l.polarity {
                             // conflict!
-                            trace!(target: "bcp", "Variable {:?} implied to be both polarities", l.variable);
+                            trace!(target: "bcp", "Clause {}: Variable {:?} implied to be both polarities", c.id, l.variable);
+                            trace!(target: "bcp", "{:?}", c);
                             return false;
                         } else {
-                            trace!(target: "bcp", "Variable {:?} implied to be {:?}", l.variable, l.polarity);
+                            trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
+                            trace!(target: "bcp", "{:?}", c);
                         }
                     } 
                     None => {
                         implied_assignments.insert(l.variable, l.polarity);
-                        trace!(target: "bcp", "Variable {:?} implied to be {:?}", l.variable, l.polarity);
+                        trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
+                        trace!(target: "bcp", "{:?}", c);
                     }
                 }
             }
@@ -283,7 +286,7 @@ pub fn boolean_constant_propagation(
         // We try those implied assignments one at a time. 
         if let Some((v, p)) = implied_assignments.pop_first() {
             solution.push_step(v, p, SolutionStepType::ForcedAtBCP);
-            trace!(target: "bcp", "picking variable {:?}", v);
+            trace!(target: "bcp", "Assinging variable {:?}", v);
             trace!(target: "bcp", "solution stack: {:?}", solution);
 
             mark_variable_assigned(problem, v);
