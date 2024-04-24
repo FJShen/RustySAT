@@ -1,4 +1,4 @@
-use crate::vsids::*;
+use crate::heuristics::heuristics::Heuristics;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 use crate::sat_solver::*;
 
-pub fn parse(filename: &String, vsids: &mut VSIDS) -> Problem {
+pub fn parse(filename: &String, vsids: &mut impl Heuristics) -> Problem {
   let path = Path::new(filename);
   let display = path.display();
 

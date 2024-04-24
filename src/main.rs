@@ -1,37 +1,40 @@
-use std::{borrow::BorrowMut, env};
-
 mod parser;
-mod vsids;
+mod heuristics;
 mod sat_solver;
-use vsids::VSIDS;
+use clap::Parser;
 
-use crate::sat_solver::Problem;
+use crate::{heuristics::{ascending::Ascending, heuristics::Heuristics, vsids::VSIDS}, sat_solver::Problem};
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    input: String,
+    heuristics: String,
+}
+
+fn test_ascending(input : String) {
+    let mut h = Ascending::new();
+    let p = parser::parse(&input, &mut h);
+    println!("problem is: {:#?}", p);
+    let solution = sat_solver::dpll::dpll(p, h);
+    println!("solution is {:?}", solution);
+}
+
+fn test_vsids(input : String) {
+    let mut h = VSIDS::new();
+    let p = parser::parse(&input, &mut h);
+    println!("problem is: {:#?}", p);
+    let solution = sat_solver::dpll::dpll(p, h);
+    println!("solution is {:?}", solution);
+}
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 1 {
-        panic!("Usage: cargo run <dimacs file>");
-    }
+    let args = Args::parse();
+    println!("args: {}, {}", args.input, args.heuristics);
 
-    let mut ps = Vec::<Problem>::new();
-    let mut vsids = VSIDS::new();
     // ps.push(sat_solver::get_sample_problem());
-    ps.push(parser::parse(&args[1], vsids.borrow_mut()));
-    vsids.print_sort_by_counters();
-    for i in  0..5 {
-        let l = vsids.decide().unwrap();
-        let pol = match l.polarity {
-            sat_solver::Polarity::Off  => '-',
-            sat_solver::Polarity::On   => '+',
-        };
-        println!("popped {}{}", pol, l.variable.index);
-        println!("--------------------------------");
-        vsids.print_sort_by_counters();
-    }
-
-    for p in ps {
-        println!("problem is: {:#?}", p);
-        let solution = sat_solver::dpll::dpll(p);
-        println!("solution is {:?}", solution);
-    }
+    match args.heuristics.as_str() {
+        "vsids" => test_vsids(args.input),
+        _       => test_ascending(args.input),
+    };
 }

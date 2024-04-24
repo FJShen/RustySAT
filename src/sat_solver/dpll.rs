@@ -1,9 +1,11 @@
+use crate::heuristics::{heuristics::Heuristics, vsids};
+
 use super::*;
 use std::collections::BTreeSet;
 use tailcall::tailcall;
 
 // If the problem is UNSAT, we will not return anything but throw an exception.
-pub fn dpll(mut p: Problem) -> SolutionStack {
+pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> SolutionStack {
     let mut solution = SolutionStack { stack: vec![] };
 
     // Baseline DPLL
@@ -20,18 +22,18 @@ pub fn dpll(mut p: Problem) -> SolutionStack {
     // 4. Repeat
     // Resolve all variables before we return a solution
 
-    while let Some((var, pol)) = get_one_unresolved_var(&p) {
-        solution.push_free_choice_first_try(var, pol);
-        println!("dpll picking variable {:?}", var);
+    while let Some(lit) = h.decide() {
+        solution.push_free_choice_first_try(lit.variable, lit.polarity);
+        println!("dpll picking variable {:?}", lit.variable);
         println!("solution stack: {:?}", solution);
 
-        mark_variable_assigned(&mut p, var);
-        update_literal_info_and_clauses(&mut p, var, pol);
+        mark_variable_assigned(&mut p, lit.variable);
+        update_literal_info_and_clauses(&mut p, lit.variable, lit.polarity);
 
         // sanity check
         panic_if_incoherent(&p, &solution);
 
-        let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution);
+        let resolved_all_conflicts = resolve_conflict(&mut p, &mut solution, &mut h);
         if !resolved_all_conflicts {
             panic!("UNSAT");
         }
@@ -229,7 +231,7 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
 /// a variable but neither works). Since this is a recursive function, we want to
 /// be notified if the compiler cannot apply tail-recursion optimization.
 #[tailcall]
-pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStack) -> bool {
+pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStack, heuristics: &mut impl Heuristics) -> bool {
     // do we even have an unsatiafiable clause?
     if !problem
         .list_of_clauses
@@ -282,6 +284,9 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
                 // un-assign this variable
                 let var = step.assignment.variable;
                 println!("Dropping variable {:?}", var);
+
+                // unassign variable from vsids
+                heuristics.unassign_variable(var);
 
                 // Update the list_of_variables
                 // May panic in the unlikely event var does not exist in
@@ -416,6 +421,6 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
         panic_if_incoherent(problem, solution_stack);
 
         // recursively call into this function to resolve any new conflicts
-        resolve_conflict(problem, solution_stack)
+        resolve_conflict(problem, solution_stack, heuristics)
     }
 }
