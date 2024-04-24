@@ -109,9 +109,17 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
     if !ret {return false;}
 
     while let Some((ass_v, ass_p)) = _temp_assignment_map.pop_first(){
+        // it's possible a variable has already been implied during the BCP
+        // phase
+        if problem.list_of_variables[&ass_v] == VariableState::Assigned {
+            trace!(target:"unit_clause", "Variable {:?} was already assigned", ass_v);
+            trace!(target: "unit_clause", "solution stack: {:?}", solution);
+            continue;
+        }
+
         solution.push_step(ass_v, ass_p, SolutionStepType::ForcedAtInit);
 
-        trace!(target: "unit_clause", "Assinging variable {:?}", ass_v);
+        trace!(target: "unit_clause", "Assigning variable {:?}", ass_v);
         trace!(target: "unit_clause", "solution stack: {:?}", solution);
         
         mark_variable_assigned(problem, ass_v);
