@@ -3,4 +3,3 @@ cd input
 tar -xzvf *tar.gz
 rm *tar.gz
 cd ..
-cargo run input/uf20-01.cnf
