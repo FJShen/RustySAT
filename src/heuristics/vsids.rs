@@ -44,7 +44,7 @@ impl Heuristics for VSIDS {
         }
 
         let lits = &c.list_of_literals;
-        println!("VSIDS: add clause {lits:?}");
+        trace!(target: "vsids", "VSIDS: add clause {lits:?}");
     }
 
     // recommend highest ranked literal but with inverted polarity
@@ -67,7 +67,7 @@ impl Heuristics for VSIDS {
         self.counter_literal_unassigned.remove(&(compl_literal_counter, compl_literal));
         self.counter_literal_assigned.insert((compl_literal_counter, compl_literal));
 
-        println!("VSIDS: decide {score_literal:?}");
+        trace!(target: "vsids", "VSIDS: decide {score_literal:?}");
         return Some(score_literal);
     }
 
@@ -80,6 +80,6 @@ impl Heuristics for VSIDS {
             self.counter_literal_assigned.remove(&(counter, l));
             self.counter_literal_unassigned.insert((counter, l));
         }
-        println!("VSIDS: unassign variable {var:?}");
+        trace!(target: "vsids", "VSIDS: unassign variable {var:?}");
     }
 }
