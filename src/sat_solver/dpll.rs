@@ -287,6 +287,12 @@ pub fn resolve_conflict(problem: &mut Problem, solution_stack: &mut SolutionStac
 
                 // unassign variable from vsids
                 heuristics.unassign_variable(var);
+                // register conflict clause with vsids
+                heuristics.add_clause(&Clause {
+                    id: 0,
+                    status: ClauseState::Unsatisfiable,
+                    list_of_literals: vec![Literal{variable: var, polarity: step.assignment.polarity}],
+                });
 
                 // Update the list_of_variables
                 // May panic in the unlikely event var does not exist in
