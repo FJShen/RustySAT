@@ -41,8 +41,10 @@ impl Clause{
     pub fn recalculate_clause_state(&self, problem: &Problem) -> ClauseState {
         let mut encountered_unknown_state = false;
 
-        for l in &self.list_of_literals {
-            let ls = problem.list_of_literal_infos[l].status;
+        //for l in &self.list_of_literals {
+        for li in &self.list_of_literal_infos{
+            //let ls = problem.list_of_literal_infos[l].borrow().status;
+            let ls = li.borrow().status;
             if ls == LiteralState::Sat {return ClauseState::Satisfied;}
             else if ls == LiteralState::Unknown {encountered_unknown_state = true;}
         }
@@ -72,8 +74,10 @@ impl Clause{
 
         self.list_of_literals
             .iter()
-            .for_each(|l| {
-                let l_status = problem.list_of_literal_infos[l].status;
+            .zip(self.list_of_literal_infos.iter())
+            .for_each(|(l, li)| {
+                // let l_status = problem.list_of_literal_infos[l].borrow().status;
+                let l_status = li.borrow().status;
                 if l_status == LiteralState::Sat {already_sat = true;}
                 if &self.watch_literals[0] == l {
                     status_0 = l_status;
@@ -100,21 +104,13 @@ impl Clause{
             }
         }
 
-        // if problem.list_of_literal_infos[&self.watch_literals[0]].status == LiteralState::Unsat {
-        //     watch_index = 0;
-        // } else if problem.list_of_literal_infos[&self.watch_literals[1]].status == LiteralState::Unsat {
-        //     watch_index = 1;
-        // } else {
-        //     panic!("none of the watch literals of clause {:?} is UNSAT", self);
-        // }
-
-        let substitute_literal = self.list_of_literals
-            .iter()
-            .filter(|l| !self.hits_watch_literals(**l))
-            .find(|l| problem.list_of_variables[&l.variable] == VariableState::Unassigned);
+        let substitute_literal = self.list_of_literals.iter()
+            .zip(self.list_of_literal_infos.iter())
+            .filter(|(l,_)| !self.hits_watch_literals(**l))
+            .find(|(_,li)| li.borrow().status == LiteralState::Unknown);
 
         match substitute_literal {
-            Some(l) => {
+            Some((l,_)) => {
                 self.watch_literals[watch_index] = *l; 
                 return BCPSubstituteWatchLiteralResult::FoundSubstitute;
             }

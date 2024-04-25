@@ -26,7 +26,7 @@ pub fn parse(filename: &String) -> Problem {
 
   let mut circuit = Problem {
     list_of_variables: BTreeMap::<Variable, VariableState>::new(),
-    list_of_literal_infos: BTreeMap::<Literal, LiteralInfo>::new(),
+    list_of_literal_infos: BTreeMap::<Literal, Rc<RefCell<LiteralInfo>>>::new(),
     list_of_clauses: Vec::<Rc::<RefCell::<Clause>>>::new(),
     list_of_clauses_to_check: BTreeSet::new()
   };
@@ -46,6 +46,7 @@ pub fn parse(filename: &String) -> Problem {
           id: clause_id as u32,
           // status: ClauseState::Unresolved,
           list_of_literals: Vec::<Literal>::new(),
+          list_of_literal_infos: vec![],
           watch_literals: [NULL_LITERAL; 2],
         }
       )));
@@ -78,16 +79,27 @@ pub fn parse(filename: &String) -> Problem {
       let current_clause = circuit.list_of_clauses.last().unwrap();
       circuit.list_of_literal_infos
         .entry(literal.clone())
-        .and_modify(|e| e.list_of_clauses.push(Rc::clone(current_clause)))
-        .or_insert(LiteralInfo {
-          list_of_clauses: vec![Rc::clone(current_clause)],
-          status: LiteralState::Unknown,
+        .and_modify(|e| (**e).borrow_mut().list_of_clauses.push(Rc::clone(current_clause)))
+        .or_insert({
+          let l = LiteralInfo {
+            list_of_clauses: vec![Rc::clone(current_clause)],
+            status: LiteralState::Unknown,
+          };
+          Rc::new(RefCell::new(l))
         });
       let mut clause = (**current_clause).borrow_mut();
       clause.list_of_literals.push(literal);
       clause.watch_literals[clause_lit_count%2] = literal;
     }
   }
+
+  circuit.list_of_clauses
+    .iter()
+    .for_each(|rc|{
+      let mut clause_ref = (**rc).borrow_mut();
+      clause_ref.list_of_literal_infos = 
+        clause_ref.list_of_literals.iter().map(|l|Rc::clone(&circuit.list_of_literal_infos[l])).collect()
+    });
 
   circuit
 }

@@ -159,11 +159,11 @@ pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)>
             let mut off_count: usize = 0;
             if let Some(li) = problem.list_of_literal_infos.get(
                 &Literal { variable: *v, polarity: Polarity::On }){
-                on_count = li.list_of_clauses.len();
+                on_count = li.borrow().list_of_clauses.len();
             }
             if let Some(li) = problem.list_of_literal_infos.get(
                 &Literal { variable: *v, polarity: Polarity::Off }){
-                off_count = li.list_of_clauses.len();
+                off_count = li.borrow().list_of_clauses.len();
             }
             (*v, on_count, off_count)
         })
@@ -211,18 +211,19 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
         variable: v,
         polarity: p,
     };
-    if let Some(li) = problem.list_of_literal_infos.get_mut(&same_pol_literal) {
+    if let Some(li) = problem.list_of_literal_infos.get(&same_pol_literal) {
+        let status_ref = &mut li.borrow_mut().status;
         match cause {
             UpdateLiteralInfoCause::FreeAssignment |
             UpdateLiteralInfoCause::BCPImplication |
             UpdateLiteralInfoCause::UnitClauseImplication => {
-                assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+                assert!(*status_ref == LiteralState::Unknown, "literal must not be Sat/Unsat");
             },
             UpdateLiteralInfoCause::Backtrack => {
-                assert!(li.status == LiteralState::Unsat, "literal must not be Unknown/Sat");
+                assert!(*status_ref == LiteralState::Unsat, "literal must not be Unknown/Sat");
             },
         }
-        li.status = LiteralState::Sat;
+        *status_ref = LiteralState::Sat;
     }
     
     // opposite polarity: becomes Unsat
@@ -230,22 +231,24 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
         variable: v,
         polarity: !p,
     };
-    if let Some(li) = problem.list_of_literal_infos.get_mut(&opposite_pol_literal) {
+    if let Some(li) = problem.list_of_literal_infos.get(&opposite_pol_literal) {
+        let mut li_mut_borrow = li.borrow_mut();
+        let status_ref = &mut li_mut_borrow.status;
         match cause {
             UpdateLiteralInfoCause::FreeAssignment |
             UpdateLiteralInfoCause::BCPImplication |
             UpdateLiteralInfoCause::UnitClauseImplication => {
-                assert!(li.status == LiteralState::Unknown, "literal must not be Sat/Unsat");
+                assert!(*status_ref == LiteralState::Unknown, "literal must not be Sat/Unsat");
             },
             UpdateLiteralInfoCause::Backtrack => {
-                assert!(li.status == LiteralState::Sat, "literal must not be Unknown/Unsat");
+                assert!(*status_ref == LiteralState::Sat, "literal must not be Unknown/Unsat");
             },
         }
-        li.status = LiteralState::Unsat;
+        *status_ref = LiteralState::Unsat;
         
         // For the UNSAT literal, it has the potential of changing a clause's
         // state. 
-        li.list_of_clauses.iter().for_each(|rc| {
+        li_mut_borrow.list_of_clauses.iter().for_each(|rc| {
             if USE_BCP {
                 if rc.borrow().hits_watch_literals(opposite_pol_literal) {
                     problem.list_of_clauses_to_check.insert(Rc::clone(rc)); 
@@ -405,20 +408,22 @@ pub fn udpate_clause_state_and_resolve_conflict(
                 mark_variable_unassigned(problem, var);
 
                 // update the list_of_literal_infos
-                if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
+                if let Some(li) = problem.list_of_literal_infos.get(&Literal {
                     variable: var,
                     polarity: Polarity::On,
                 }) {
-                    assert!(li.status != LiteralState::Unknown);
-                    li.status = LiteralState::Unknown;
+                    let status_ref = &mut li.borrow_mut().status;
+                    assert!(*status_ref != LiteralState::Unknown);
+                    *status_ref = LiteralState::Unknown;
                 }
 
-                if let Some(li) = problem.list_of_literal_infos.get_mut(&Literal {
+                if let Some(li) = problem.list_of_literal_infos.get(&Literal {
                     variable: var,
                     polarity: Polarity::Off,
                 }) {
-                    assert!(li.status != LiteralState::Unknown);
-                    li.status = LiteralState::Unknown;
+                    let status_ref = &mut li.borrow_mut().status;
+                    assert!(*status_ref != LiteralState::Unknown);
+                    *status_ref = LiteralState::Unknown;
                 }
             });
 
@@ -499,9 +504,10 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
             variable: *v,
             polarity: Polarity::On,
         }) {
-            if li.status == LiteralState::Unknown && *vs == VariableState::Unassigned {
-            } else if li.status == LiteralState::Sat && *vs == VariableState::Assigned {
-            } else if li.status == LiteralState::Unsat && *vs == VariableState::Assigned {
+            let status_ref = &li.borrow().status;
+            if *status_ref == LiteralState::Unknown && *vs == VariableState::Unassigned {
+            } else if *status_ref == LiteralState::Sat && *vs == VariableState::Assigned {
+            } else if *status_ref == LiteralState::Unsat && *vs == VariableState::Assigned {
             } else {
                 panic!(
                     "LiteralInfo {:?} is incoherent with variable {:?}",
@@ -514,9 +520,10 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
             variable: *v,
             polarity: Polarity::Off,
         }) {
-            if li.status == LiteralState::Unknown && *vs == VariableState::Unassigned {
-            } else if li.status == LiteralState::Sat && *vs == VariableState::Assigned {
-            } else if li.status == LiteralState::Unsat && *vs == VariableState::Assigned {
+            let status_ref = &li.borrow().status;
+            if *status_ref == LiteralState::Unknown && *vs == VariableState::Unassigned {
+            } else if *status_ref == LiteralState::Sat && *vs == VariableState::Assigned {
+            } else if *status_ref == LiteralState::Unsat && *vs == VariableState::Assigned {
             } else {
                 panic!(
                     "LiteralInfo {:?} is incoherent with variable {:?}",

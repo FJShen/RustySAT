@@ -37,7 +37,7 @@ pub struct Literal {
     pub polarity: Polarity,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum LiteralState {
     Unknown,
     Unsat,
@@ -52,11 +52,12 @@ pub enum Polarity {
 
 static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
 
-#[derive(Debug,PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
     pub id: u32,
     // pub status: ClauseState,
     pub list_of_literals: Vec<Literal>,
+    pub list_of_literal_infos: Vec<Rc<RefCell<LiteralInfo>>>,
     pub watch_literals: [Literal; 2],
 }
 
@@ -67,7 +68,7 @@ pub enum ClauseState {
     Unresolved,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LiteralInfo {
     pub status: LiteralState,
     pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
@@ -85,7 +86,7 @@ pub struct Problem {
     // The benefit of using BTreeMap instead of a HashMap: when debug-printing
     // the contents of the former, entries are sorted in a human-friendly way.
     pub list_of_variables: BTreeMap<Variable, VariableState>,
-    pub list_of_literal_infos: BTreeMap<Literal, LiteralInfo>,
+    pub list_of_literal_infos: BTreeMap<Literal, Rc<RefCell<LiteralInfo>>>,
     pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
 
     // This container contains (reference to) clauses that need to have their
