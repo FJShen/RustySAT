@@ -10,18 +10,17 @@ pub struct VSIDS {
 }
 
 impl VSIDS {
+    // print unassigned literals ranked by score in descending order
     pub fn print_sorted(&self) {
-        for c in self.counter_literal_unassigned.iter().rev() {
-            let pol = match c.1.polarity {
-                Polarity::Off  => '-',
-                Polarity::On   => '+',
-            };
-            println!("{}{} : {}", pol, c.1.variable.index, c.0);
+        println!("VSIDS: print sorted");
+        for (i, l) in self.counter_literal_unassigned.iter().rev() {
+            println!("{} {l:?}", i)
         }
     }
 }
 
 impl Heuristics for VSIDS {
+    // creates a new heuristics struct
     fn new() -> Self {
         VSIDS {
             literal_counter: BTreeMap::<Literal, u32>::new(),
@@ -31,7 +30,7 @@ impl Heuristics for VSIDS {
         }
     }
     
-    // called when adding parsed or conflict clauses
+    // add parsed or conflict clauses and bump score of contained literals
     fn add_clause(&mut self, c: &Clause) {
         for l in c.list_of_literals.iter() {
             *self.literal_counter
@@ -43,8 +42,12 @@ impl Heuristics for VSIDS {
             self.counter_literal_unassigned
                 .remove(&(counter-self.iteration, *l));
         }
+
+        let lits = &c.list_of_literals;
+        println!("VSIDS: add clause {lits:?}");
     }
 
+    // recommend highest ranked literal but with inverted polarity
     fn decide(&mut self) -> Option<Literal> {
         self.iteration += 1;
         let highest_literal = self.counter_literal_unassigned.pop_last();
@@ -55,17 +58,20 @@ impl Heuristics for VSIDS {
         
         let score_literal = highest_literal.unwrap();
         self.counter_literal_assigned.insert(score_literal);
+        let score_literal = score_literal.1;
         let compl_literal = Literal {
-            variable: score_literal.1.variable,
-            polarity: if score_literal.1.polarity == Polarity::Off  {Polarity::On} else {Polarity::Off},
+            variable: score_literal.variable,
+            polarity: if score_literal.polarity == Polarity::Off  {Polarity::On} else {Polarity::Off},
         };
         let compl_literal_counter = self.literal_counter.get(&compl_literal).unwrap().clone();
         self.counter_literal_unassigned.remove(&(compl_literal_counter, compl_literal));
         self.counter_literal_assigned.insert((compl_literal_counter, compl_literal));
 
-        return Some(score_literal.1);
+        println!("VSIDS: decide {score_literal:?}");
+        return Some(score_literal);
     }
 
+    // move a variable from assigned group to unassigned group
     fn unassign_variable(&mut self, var : Variable) {
         let v0 = Literal {variable: var, polarity: Polarity::Off};
         let v1 = Literal {variable: var, polarity: Polarity::On};
@@ -74,5 +80,6 @@ impl Heuristics for VSIDS {
             self.counter_literal_assigned.remove(&(counter, l));
             self.counter_literal_unassigned.insert((counter, l));
         }
+        println!("VSIDS: unassign variable {var:?}");
     }
 }
