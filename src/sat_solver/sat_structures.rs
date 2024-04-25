@@ -37,6 +37,25 @@ impl fmt::Debug for Literal {
     }
 }
 
+impl fmt::Debug for Clause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        #[derive(Debug)]
+        struct _Clause<'a>{
+            pub id: &'a u32,
+            // pub status: ClauseState,
+            pub list_of_literals: &'a Vec<Literal>,
+            pub watch_literals: &'a [Literal; 2],
+        }
+        
+        let c = _Clause{
+            id: &self.id,
+            list_of_literals : &self.list_of_literals,
+            watch_literals: &self.watch_literals
+        };
+        write!(f, "{:#?}", c)
+    }
+}
+
 impl Clause{
     pub fn recalculate_clause_state(&self, problem: &Problem) -> ClauseState {
         let mut encountered_unknown_state = false;

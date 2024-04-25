@@ -6,7 +6,7 @@ use tailcall::tailcall;
 use log::{info, log_enabled, trace};
 
 // If the problem is UNSAT, we will return None
-pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
+pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
     let mut solution = SolutionStack { stack: vec![] };
 
     // Baseline DPLL
@@ -25,11 +25,11 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
     // 4. Repeat
     // Resolve all variables before we return a solution
 
-    let ret = force_assignment_for_unit_clauses(&mut p, &mut solution);
+    let ret = force_assignment_for_unit_clauses(&mut p, &mut solution, &mut h);
     if !ret {return None;}
     trace!(target: "dpll", "solution stack: {:?}", solution);
 
-    while let Some((var, pol)) = get_one_unresolved_var(&p) {
+    while let Some(Literal{variable: var, polarity: pol}) = h.decide() {
         solution.push_free_choice_first_try(var, pol);
         trace!(target: "dpll", "Assigning variable {:?}", var);
         trace!(target: "dpll", "solution stack: {:?}", solution);
@@ -41,14 +41,14 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
         // panic_if_incoherent(&p, &solution);
         if USE_BCP{
             while !boolean_constant_propagation(&mut p, &mut solution) {
-                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution);
+                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
                 if !resolved_all_conflicts {
                     return None;
                 } 
             }
             trace!(target: "bcp", "No more implications");
         } else {
-            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution);
+            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
             if !resolved_all_conflicts {
                 return None;
             }            
@@ -78,7 +78,8 @@ pub fn dpll(mut p: Problem) -> Option<SolutionStack> {
 /// 2. Assign one variable at a time, performing BCP and conflict resolution
 ///    along the way
 /// 2.1 This step is much like how freely-assigned variables are handled.  
-pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut SolutionStack) -> bool{
+pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut SolutionStack,
+    heuristics: &mut impl Heuristics) -> bool{
 
     // Go over all clauses, hunt for those that have only one literal
     let it_literals_to_force = problem.list_of_clauses
@@ -129,14 +130,14 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
         
         if USE_BCP{
             while !boolean_constant_propagation(problem, solution) {
-                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution);
+                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
                 if !resolved_all_conflicts {
                     return false;
                 } 
             }
             trace!(target: "bcp", "No more implications");
         } else {
-            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution);
+            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
             if !resolved_all_conflicts {
                 return false;
             }            
@@ -335,7 +336,8 @@ pub fn boolean_constant_propagation(
 #[tailcall]
 pub fn udpate_clause_state_and_resolve_conflict(
     problem: &mut Problem, 
-    solution_stack: &mut SolutionStack
+    solution_stack: &mut SolutionStack,
+    heuristics: &mut impl Heuristics
 ) -> bool {
     if !USE_BCP{
         // do we even have an unsatiafiable clause?
@@ -358,6 +360,9 @@ pub fn udpate_clause_state_and_resolve_conflict(
             if new_status == ClauseState::Unsatisfiable {
                 // One unsat clause is enough, we have to keep backtracking
                 found_unsat = true;
+
+                // register conflict clause with vsids
+                heuristics.add_clause(&c);
                 break;
             }
         }
@@ -403,6 +408,8 @@ pub fn udpate_clause_state_and_resolve_conflict(
                 // un-assign this variable
                 let var = step.assignment.variable;
                 trace!(target: "backtrack", "Dropping variable {:?}", var);
+
+                heuristics.unassign_variable(var);
 
                 // Update the list_of_variables
                 // May panic in the unlikely event var does not exist in
@@ -462,7 +469,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
         }
 
         // recursively call into this function to resolve any new conflicts
-        return udpate_clause_state_and_resolve_conflict(problem, solution_stack);
+        return udpate_clause_state_and_resolve_conflict(problem, solution_stack, heuristics);
     }
 }
 

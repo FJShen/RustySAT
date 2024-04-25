@@ -2,6 +2,7 @@ mod parser;
 mod heuristics;
 mod sat_solver;
 use clap::Parser;
+use log::{trace,info};
 
 use crate::{heuristics::{ascending::Ascending, heuristics::Heuristics, vsids::VSIDS}, sat_solver::Problem};
 
@@ -15,22 +16,24 @@ struct Args {
 fn test_ascending(input : String) {
     let mut h = Ascending::new();
     let p = parser::parse(&input, &mut h);
-    println!("problem is: {:#?}", p);
+    trace!(target: "solver", "problem is: {:#?}", p);
     let solution = sat_solver::dpll::dpll(p, h);
-    println!("solution is {:?}", solution);
+    info!(target: "solver", "solution is {:?}", solution);
 }
 
 fn test_vsids(input : String) {
     let mut h = VSIDS::new();
     let p = parser::parse(&input, &mut h);
-    println!("problem is: {:#?}", p);
+    trace!(target: "solver", "problem is: {:#?}", p);
     let solution = sat_solver::dpll::dpll(p, h);
-    println!("solution is {:?}", solution);
+    info!(target: "solver", "solution is {:?}", solution);
 }
 
 fn main() {
+    env_logger::init();
+
     let args = Args::parse();
-    println!("args: {}, {}", args.input, args.heuristics);
+    trace!(target: "solver", "args: {}, {}", args.input, args.heuristics);
 
     // ps.push(sat_solver::get_sample_problem());
     match args.heuristics.as_str() {

@@ -12,7 +12,7 @@ pub mod dpll;
 mod sat_structures;
 // pub use sat_structures::get_sample_problem;
 
-static USE_BCP: bool = true;
+static USE_BCP: bool = false;
 
 ////////////////////////////////////////////////////////
 // Data structures for the SAT Problem
@@ -52,7 +52,7 @@ pub enum Polarity {
 
 static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive( PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
     pub id: u32,
     // pub status: ClauseState,

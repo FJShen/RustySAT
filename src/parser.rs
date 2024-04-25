@@ -5,7 +5,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use crate::sat_solver::*;
 
 pub fn parse(filename: &String, vsids: &mut impl Heuristics) -> Problem {
@@ -90,6 +90,8 @@ pub fn parse(filename: &String, vsids: &mut impl Heuristics) -> Problem {
       clause.list_of_literals.push(literal);
       clause.watch_literals[clause_lit_count%2] = literal;
     }
+    let current_clause = circuit.list_of_clauses.last().unwrap();
+    vsids.add_clause(&current_clause.borrow());
   }
 
   circuit.list_of_clauses
@@ -100,6 +102,5 @@ pub fn parse(filename: &String, vsids: &mut impl Heuristics) -> Problem {
         clause_ref.list_of_literals.iter().map(|l|Rc::clone(&circuit.list_of_literal_infos[l])).collect()
     });
 
-  vsids.add_clause(clause);
   circuit
 }

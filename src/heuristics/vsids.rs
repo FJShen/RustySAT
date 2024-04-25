@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use crate::sat_solver::*;
 use crate::heuristics::heuristics::*;
+use log::trace;
 
 pub struct VSIDS {
     pub literal_counter : BTreeMap<Literal, u32>,
