@@ -1,4 +1,4 @@
-use std::borrow::{Borrow, BorrowMut};
+use crate::heuristics::heuristics::Heuristics;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -6,10 +6,9 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use crate::sat_solver::*;
 
-pub fn parse(filename: &String) -> Problem {
+pub fn parse(filename: &String, vsids: &mut impl Heuristics) -> Problem {
   let path = Path::new(filename);
   let display = path.display();
 
@@ -101,5 +100,6 @@ pub fn parse(filename: &String) -> Problem {
         clause_ref.list_of_literals.iter().map(|l|Rc::clone(&circuit.list_of_literal_infos[l])).collect()
     });
 
+  vsids.add_clause(clause);
   circuit
 }

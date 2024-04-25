@@ -10,6 +10,7 @@ lto = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
 global_counter = "0.2.2"
 tailcall = "1.0.1"
 log = "0.4.21" 

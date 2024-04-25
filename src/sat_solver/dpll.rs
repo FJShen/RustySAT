@@ -1,3 +1,5 @@
+use crate::heuristics::{heuristics::Heuristics, vsids};
+
 use super::*;
 use std::{cell::Ref, collections::BTreeSet};
 use tailcall::tailcall;
