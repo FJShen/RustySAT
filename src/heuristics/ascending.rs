@@ -50,4 +50,9 @@ impl Heuristics for Ascending {
         self.variable_assigned.remove(&var);
         self.variable_unassigned.insert(var);
     }
+
+    fn assign_variable(&mut self, var : Variable) {
+        self.variable_unassigned.remove(&var);
+        self.variable_assigned.insert(var);
+    }
 }

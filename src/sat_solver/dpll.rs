@@ -1,4 +1,4 @@
-use crate::heuristics::{heuristics::Heuristics, vsids};
+use crate::heuristics::heuristics::Heuristics;
 
 use super::*;
 use std::{cell::Ref, collections::BTreeSet};
