@@ -33,7 +33,7 @@ fn main() {
     env_logger::init();
 
     let args = Args::parse();
-    trace!(target: "solver", "args: {}, {}", args.input, args.heuristics);
+    info!(target: "solver", "args: {}, {}", args.input, args.heuristics);
 
     // ps.push(sat_solver::get_sample_problem());
     match args.heuristics.as_str() {

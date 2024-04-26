@@ -40,7 +40,7 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
         // sanity check
         // panic_if_incoherent(&p, &solution);
         if USE_BCP{
-            while !boolean_constant_propagation(&mut p, &mut solution) {
+            while !boolean_constant_propagation(&mut p, &mut solution, &mut h) {
                 let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
                 if !resolved_all_conflicts {
                     return None;
@@ -124,12 +124,14 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
 
         trace!(target: "unit_clause", "Assigning variable {:?}", ass_v);
         trace!(target: "unit_clause", "solution stack: {:?}", solution);
+
+        heuristics.assign_variable(ass_v);
         
         mark_variable_assigned(problem, ass_v);
         update_literal_info(problem, ass_v, ass_p, UpdateLiteralInfoCause::UnitClauseImplication);
         
         if USE_BCP{
-            while !boolean_constant_propagation(problem, solution) {
+            while !boolean_constant_propagation(problem, solution, heuristics) {
                 let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
                 if !resolved_all_conflicts {
                     return false;
@@ -268,7 +270,7 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
 /// variable is implied to be both On and Off. 
 pub fn boolean_constant_propagation(
     problem: &mut Problem,
-    solution: &mut SolutionStack
+    solution: &mut SolutionStack, heuristics: &mut impl Heuristics
 ) -> bool {
     let mut implied_assignments = BTreeMap::<Variable, Polarity>::new();
 
@@ -278,7 +280,7 @@ pub fn boolean_constant_propagation(
         // are forced to assign the other watch variable.
         while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
             let mut c = rc.borrow_mut();
-            //trace!(target: "bcp", "Examining clause {}", c.id);
+            trace!(target: "bcp", "Examining clause {}", c.id);
 
             let substitution_result = c.try_substitute_watch_literal(problem);
             match substitution_result {
@@ -291,7 +293,7 @@ pub fn boolean_constant_propagation(
                     let mut conflict=false;
 
                     implied_assignments.entry(l.variable)
-                        .and_modify({|p| // we aren't really modifying anything
+                        .and_modify(|p|{ // we aren't really modifying anything
                             if *p != l.polarity {
                                 // conflict!
                                 trace!(target: "bcp", "Clause {}: Variable {:?} implied to be both polarities", c.id, l.variable);
@@ -302,7 +304,7 @@ pub fn boolean_constant_propagation(
                                 trace!(target: "bcp", "{:?}", c);
                             }
                         })
-                        .or_insert({
+                        .or_insert_with(||{
                             trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
                             trace!(target: "bcp", "{:?}", c);
                             l.polarity
@@ -320,6 +322,8 @@ pub fn boolean_constant_propagation(
             solution.push_step(v, p, SolutionStepType::ForcedAtBCP);
             trace!(target: "bcp", "Assinging variable {:?}", v);
             trace!(target: "bcp", "solution stack: {:?}", solution);
+
+            heuristics.assign_variable(v);
 
             mark_variable_assigned(problem, v);
             update_literal_info(problem, v, p, UpdateLiteralInfoCause::BCPImplication); // adds clauses to list_of_clauses_to_check

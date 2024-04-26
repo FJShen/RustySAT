@@ -52,7 +52,7 @@ impl fmt::Debug for Clause {
             list_of_literals : &self.list_of_literals,
             watch_literals: &self.watch_literals
         };
-        write!(f, "{:#?}", c)
+        write!(f, "{:?}", c)
     }
 }
 
