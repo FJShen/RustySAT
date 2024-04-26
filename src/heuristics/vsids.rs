@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::sat_solver::*;
 use crate::heuristics::heuristics::*;
 use log::trace;
+use std::fmt::Debug;
+use core::fmt;
 
 pub struct VSIDS {
     pub literal_counter : BTreeMap<Literal, u32>,
@@ -10,13 +12,14 @@ pub struct VSIDS {
     pub iteration : u32,
 }
 
-impl VSIDS {
+impl Debug for VSIDS {
     // print unassigned literals ranked by score in descending order
-    pub fn print_sorted(&self) {
-        println!("VSIDS: print sorted");
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        _ = writeln!(f, "VSIDS: print");
         for (i, l) in self.counter_literal_unassigned.iter().rev() {
-            println!("{} {l:?}", i)
+            _ = write!(f, "{} {l:?}", i);
         }
+        writeln!(f)
     }
 }
 

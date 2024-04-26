@@ -2,24 +2,25 @@ use std::collections::BTreeSet;
 use crate::sat_solver::*;
 use crate::heuristics::heuristics::*;
 use log::trace;
+use std::fmt::Debug;
+use core::fmt;
 
 pub struct Ascending {
     pub variable_unassigned: BTreeSet<Variable>,
     pub variable_assigned: BTreeSet<Variable>,
 }
 
-impl Ascending {
-    pub fn print(&self) {
-        println!("Assigned variables");
+impl Debug for Ascending {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        _ = writeln!(f, "Assigned variables");
         for v in self.variable_assigned.iter() {
-            print!("{} ", v.index);
+            _ = write!(f, "{} ", v.index);
         }
-        println!();
-        println!("Unassigned variables");
+        _ = writeln!(f, "\nUnassigned variables");
         for v in self.variable_unassigned.iter() {
-            print!("{}", v.index);
+            _ = write!(f, "{}", v.index);
         }
-        println!();
+        writeln!(f, "")
     }
 }
 
@@ -33,10 +34,9 @@ impl Heuristics for Ascending {
 
     fn add_clause(&mut self, c: &Clause) {
         for l in c.list_of_literals.iter() {
-            if self.variable_assigned.contains(&l.variable) {
-                continue;
+            if !self.variable_assigned.contains(&l.variable) {
+                self.variable_unassigned.insert(l.variable);
             }
-            self.variable_unassigned.insert(l.variable);
         }
         trace!(target: "heuristics", "Ascending: add clause {c:?}");
     }
