@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use crate::sat_solver::*;
 
-pub fn parse(filename: &String, vsids: &mut impl Heuristics) -> Problem {
+pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
   let path = Path::new(filename);
   let display = path.display();
 
@@ -91,7 +91,7 @@ pub fn parse(filename: &String, vsids: &mut impl Heuristics) -> Problem {
       clause.watch_literals[clause_lit_count%2] = literal;
     }
     let current_clause = circuit.list_of_clauses.last().unwrap();
-    vsids.add_clause(&current_clause.borrow());
+    heuristics.add_clause(&current_clause.borrow());
   }
 
   circuit.list_of_clauses

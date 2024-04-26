@@ -33,6 +33,9 @@ impl Heuristics for Ascending {
 
     fn add_clause(&mut self, c: &Clause) {
         for l in c.list_of_literals.iter() {
+            if self.variable_assigned.contains(&l.variable) {
+                continue;
+            }
             self.variable_unassigned.insert(l.variable);
         }
         trace!(target: "heuristics", "Ascending: add clause {c:?}");

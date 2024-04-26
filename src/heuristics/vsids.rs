@@ -64,9 +64,10 @@ impl Heuristics for VSIDS {
                 variable: score_literal.variable,
                 polarity: if score_literal.polarity == Polarity::Off  {Polarity::On} else {Polarity::Off},
             };
-            let compl_literal_counter = self.literal_counter.get(&compl_literal).unwrap().clone();
-            assert!(self.counter_literal_unassigned.remove(&(compl_literal_counter, compl_literal)));
-            assert!(self.counter_literal_assigned.insert((compl_literal_counter, compl_literal)));
+            if let Some(compl_literal_counter) = self.literal_counter.get(&compl_literal) {
+                assert!(self.counter_literal_unassigned.remove(&(*compl_literal_counter, compl_literal)));
+                assert!(self.counter_literal_assigned.insert((*compl_literal_counter, compl_literal)));
+            }
 
             trace!(target: "vsids", "VSIDS: decide {score_literal:?}");
             return Some(score_literal);

@@ -365,7 +365,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
                 // One unsat clause is enough, we have to keep backtracking
                 found_unsat = true;
 
-                // register conflict clause with vsids
+                // register conflict clause with heuristics
                 heuristics.add_clause(&c);
                 break;
             }
