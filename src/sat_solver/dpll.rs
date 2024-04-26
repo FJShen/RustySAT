@@ -7,7 +7,7 @@ use tailcall::tailcall;
 
 // If the problem is UNSAT, we will return None
 pub fn dpll(
-    mut p: Problem,
+    mut p: &mut Problem,
     mut h: impl Heuristics,
     prof: &mut SolverProfiler,
 ) -> Option<SolutionStack> {
