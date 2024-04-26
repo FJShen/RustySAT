@@ -116,7 +116,7 @@ pub struct Assignment {
 // we have custom impl of Debug
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SolutionStep {
-    assignment: Assignment,
+    pub assignment: Assignment,
     assignment_type: SolutionStepType,
 }
 

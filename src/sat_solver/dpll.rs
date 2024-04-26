@@ -6,7 +6,7 @@ use tailcall::tailcall;
 use log::{info, log_enabled, trace};
 
 // If the problem is UNSAT, we will return None
-pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
+pub fn dpll(mut p: &mut Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
     let mut solution = SolutionStack { stack: vec![] };
 
     // Baseline DPLL
