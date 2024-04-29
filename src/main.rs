@@ -13,8 +13,12 @@ use crate::{
 #[command(version, about, long_about = None)]
 struct Args {
     input: String,
+
+    #[arg(default_value_t = String::from("vsids"), long)]
     heuristics: String,
-    bcp: String,
+
+    #[arg(long)]
+    no_bcp: bool,
 }
 
 fn test_ascending(input: String, use_bcp: bool) {
@@ -39,12 +43,9 @@ fn main() {
     env_logger::init();
 
     let args = Args::parse();
-    info!(target: "solver", "args: {}, {}, {}", args.input, args.heuristics, args.bcp);
+    info!(target: "solver", "{:?}", args);
 
-    let use_bcp = match args.bcp.as_str() {
-        "bcp" => true,
-        _ => false,
-    };
+    let use_bcp = !args.no_bcp;
 
     // ps.push(sat_solver::get_sample_problem());
     match args.heuristics.as_str() {

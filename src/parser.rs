@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
+use log::info;
 
 use crate::sat_solver::*;
 use std::collections::{HashMap, BTreeSet};
@@ -20,7 +21,7 @@ pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
     let mut buffer = String::new();
     match file.read_to_string(&mut buffer) {
         Err(why) => panic!("failed to read {}: {}", display, why),
-        Ok(_) => println!("successfully read {}", display),
+        Ok(_) => info!(target: "parser", "successfully read {}", display),
     };
 
     let mut circuit = Problem {
