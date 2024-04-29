@@ -2,7 +2,8 @@ mod heuristics;
 mod parser;
 mod profiler;
 mod sat_solver;
-use std::{borrow::{Borrow, BorrowMut}, collections::BTreeSet};
+use std::{borrow::BorrowMut, collections::BTreeSet};
+
 use clap::Parser;
 use log::{info, trace};
 use crate::heuristics::{ascending::Ascending, heuristics::Heuristics, vsids::VSIDS};
