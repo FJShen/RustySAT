@@ -3,6 +3,7 @@ use crate::heuristics::heuristics::Heuristics;
 use super::*;
 use log::{info, trace};
 use tailcall::tailcall;
+use std::collections::BTreeMap;
 
 // If the problem is UNSAT, we will return None
 pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {

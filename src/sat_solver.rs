@@ -1,7 +1,8 @@
 use core::fmt;
 use global_counter::primitive::exact::CounterU32;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -86,8 +87,8 @@ pub enum BCPSubstituteWatchLiteralResult {
 pub struct Problem {
     // The benefit of using BTreeMap instead of a HashMap: when debug-printing
     // the contents of the former, entries are sorted in a human-friendly way.
-    pub list_of_variables: BTreeMap<Variable, VariableState>,
-    pub list_of_literal_infos: BTreeMap<Literal, Rc<RefCell<LiteralInfo>>>,
+    pub list_of_variables: HashMap<Variable, VariableState>,
+    pub list_of_literal_infos: HashMap<Literal, Rc<RefCell<LiteralInfo>>>,
     pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
 
     // This container contains (reference to) clauses that need to have their

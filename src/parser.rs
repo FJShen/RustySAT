@@ -6,7 +6,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::sat_solver::*;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{HashMap, BTreeSet};
 
 pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
     let path = Path::new(filename);
@@ -24,8 +24,8 @@ pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
     };
 
     let mut circuit = Problem {
-        list_of_variables: BTreeMap::<Variable, VariableState>::new(),
-        list_of_literal_infos: BTreeMap::<Literal, Rc<RefCell<LiteralInfo>>>::new(),
+        list_of_variables: HashMap::<Variable, VariableState>::new(),
+        list_of_literal_infos: HashMap::<Literal, Rc<RefCell<LiteralInfo>>>::new(),
         list_of_clauses: Vec::<Rc<RefCell<Clause>>>::new(),
         list_of_clauses_to_check: BTreeSet::new(),
     };
