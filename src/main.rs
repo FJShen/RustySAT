@@ -80,7 +80,7 @@ fn main() {
     // ps.push(sat_solver::get_sample_problem());
     let (p, s) = match args.heuristics.as_str() {
         "vsids" => test_vsids(args.input, use_bcp),
-        _       => test_ascending(args.input, use_bcp),
+        _ => test_ascending(args.input, use_bcp),
     };
 
     if let Some(s) = &s  {

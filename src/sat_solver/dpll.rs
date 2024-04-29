@@ -53,7 +53,7 @@ pub fn dpll(
         if h.use_bcp() {
             while !boolean_constant_propagation(&mut p, &mut solution, &mut h, prof) {
                 let resolved_all_conflicts =
-                    udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
+                    update_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
                 if !resolved_all_conflicts {
                     return None;
                 }
@@ -61,7 +61,7 @@ pub fn dpll(
             trace!(target: "bcp", "No more implications");
         } else {
             let resolved_all_conflicts =
-                udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
+                update_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
             if !resolved_all_conflicts {
                 return None;
             }
@@ -159,7 +159,7 @@ pub fn force_assignment_for_unit_clauses(
         if heuristics.use_bcp() {
             while !boolean_constant_propagation(problem, solution, heuristics, prof) {
                 let resolved_all_conflicts =
-                    udpate_clause_state_and_resolve_conflict(problem, solution, heuristics, prof);
+                    update_clause_state_and_resolve_conflict(problem, solution, heuristics, prof);
                 if !resolved_all_conflicts {
                     return false;
                 }
@@ -167,7 +167,7 @@ pub fn force_assignment_for_unit_clauses(
             trace!(target: "bcp", "No more implications");
         } else {
             let resolved_all_conflicts =
-                udpate_clause_state_and_resolve_conflict(problem, solution, heuristics, prof);
+                update_clause_state_and_resolve_conflict(problem, solution, heuristics, prof);
             if !resolved_all_conflicts {
                 return false;
             }
@@ -359,7 +359,7 @@ pub fn boolean_constant_propagation(
 /// the problem is UNSAT (i.e., we have tried both the on- and off-assignment for
 /// a variable but neither works).
 #[tailcall]
-pub fn udpate_clause_state_and_resolve_conflict(
+pub fn update_clause_state_and_resolve_conflict(
     problem: &mut Problem,
     solution_stack: &mut SolutionStack,
     heuristics: &mut impl Heuristics,
@@ -503,7 +503,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
         }
 
         // recursively call into this function to resolve any new conflicts
-        return udpate_clause_state_and_resolve_conflict(problem, solution_stack, heuristics, prof);
+        return update_clause_state_and_resolve_conflict(problem, solution_stack, heuristics, prof);
     }
 }
 

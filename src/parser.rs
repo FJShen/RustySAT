@@ -7,7 +7,7 @@ use std::path::Path;
 use std::rc::Rc;
 
 use crate::sat_solver::*;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{HashMap, BTreeSet};
 
 pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
     let path = Path::new(filename);

@@ -6,11 +6,11 @@ use std::collections::{BTreeSet, BTreeMap};
 use std::fmt::Debug;
 
 pub struct VSIDS {
-    pub literal_counter : BTreeMap<Literal, u32>,
-    pub counter_literal_assigned : BTreeSet<(u32, Literal)>,
-    pub counter_literal_unassigned : BTreeSet<(u32, Literal)>,
-    pub iteration : u32,
-    use_bcp: bool
+    pub literal_counter: BTreeMap<Literal, u32>,
+    pub counter_literal_assigned: BTreeSet<(u32, Literal)>,
+    pub counter_literal_unassigned: BTreeSet<(u32, Literal)>,
+    pub iteration: u32,
+    use_bcp: bool,
 }
 
 impl Debug for VSIDS {
@@ -32,7 +32,7 @@ impl Heuristics for VSIDS {
             counter_literal_assigned: BTreeSet::<(u32, Literal)>::new(),
             counter_literal_unassigned: BTreeSet::<(u32, Literal)>::new(),
             iteration: 1,
-            use_bcp: false
+            use_bcp: false,
         }
     }
 
