@@ -1,8 +1,6 @@
 use core::fmt;
-use global_counter::primitive::exact::CounterU32;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::BTreeSet;
 use std::rc::Rc;
 
@@ -51,8 +49,6 @@ pub enum Polarity {
     Off,
     On,
 }
-
-static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {

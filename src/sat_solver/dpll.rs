@@ -359,7 +359,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
         // do we even have an unsatiafiable clause?
         let mut found_unsat = false;
         while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
-            let mut c = rc.borrow_mut();
+            let c = rc.borrow_mut();
             trace!(target: "backtrack", "Examining clause {}", c.id);
 
             // we want to see if this clause becomes satisfied or
@@ -507,8 +507,8 @@ pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)>
     let tuple_result: Option<(Variable, usize, usize)> = problem
         .list_of_variables
         .iter()
-        .filter(|(v, vs)| **vs == VariableState::Unassigned)
-        .map(|(v, vs)| {
+        .filter(|(_v, vs)| **vs == VariableState::Unassigned)
+        .map(|(v, _vs)| {
             let mut on_count: usize = 0;
             let mut off_count: usize = 0;
             if let Some(li) = problem.list_of_literal_infos.get(&Literal {
@@ -525,7 +525,7 @@ pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)>
             }
             (*v, on_count, off_count)
         })
-        .max_by_key(|(v, on_count, off_count)| on_count + off_count);
+        .max_by_key(|(_v, on_count, off_count)| on_count + off_count);
 
     if let Some((v, on_count, off_count)) = tuple_result {
         if on_count > off_count {
@@ -613,7 +613,7 @@ pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
         .list_of_clauses
         .iter()
         .map(|rc| rc.borrow())
-        .for_each(|c| {
+        .for_each(|_c| {
             // assert!(c.recalculate_clause_state(problem) == c.status);
         });
 }

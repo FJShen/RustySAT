@@ -1,13 +1,13 @@
 use crate::heuristics::heuristics::Heuristics;
+use log::info;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
-use log::info;
 
 use crate::sat_solver::*;
-use std::collections::{HashMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 
 pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
     let path = Path::new(filename);

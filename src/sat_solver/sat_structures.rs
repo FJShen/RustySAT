@@ -46,16 +46,16 @@ impl fmt::Debug for Clause {
         // cause more Clauses to be printed...
         #[derive(Debug)]
         struct _Clause<'a> {
-            pub id: &'a u32,
+            pub _id: &'a u32,
             // pub status: ClauseState,
-            pub list_of_literals: &'a Vec<Literal>,
-            pub watch_literals: &'a [Literal; 2],
+            pub _list_of_literals: &'a Vec<Literal>,
+            pub _watch_literals: &'a [Literal; 2],
         }
 
         let c = _Clause {
-            id: &self.id,
-            list_of_literals: &self.list_of_literals,
-            watch_literals: &self.watch_literals,
+            _id: &self.id,
+            _list_of_literals: &self.list_of_literals,
+            _watch_literals: &self.watch_literals,
         };
         write!(f, "{:?}", c)
     }

@@ -4,10 +4,7 @@ mod sat_solver;
 use clap::Parser;
 use log::{info, trace};
 
-use crate::{
-    heuristics::{ascending::Ascending, heuristics::Heuristics, vsids::VSIDS},
-    sat_solver::Problem,
-};
+use crate::heuristics::{ascending::Ascending, heuristics::Heuristics, vsids::VSIDS};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
