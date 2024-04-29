@@ -12,8 +12,6 @@ pub mod dpll;
 mod sat_structures;
 // pub use sat_structures::get_sample_problem;
 
-static USE_BCP: bool = false;
-
 ////////////////////////////////////////////////////////
 // Data structures for the SAT Problem
 ////////////////////////////////////////////////////////

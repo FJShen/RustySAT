@@ -1,4 +1,4 @@
-use crate::heuristics::heuristics::Heuristics;
+use crate::heuristics::{self, heuristics::Heuristics};
 
 use super::*;
 use std::{cell::Ref, collections::BTreeSet};
@@ -35,11 +35,11 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
         trace!(target: "dpll", "solution stack: {:?}", solution);
 
         mark_variable_assigned(&mut p, var);
-        update_literal_info(&mut p, var, pol, UpdateLiteralInfoCause::FreeAssignment);
+        update_literal_info(&mut p, var, pol, UpdateLiteralInfoCause::FreeAssignment, &h);
 
         // sanity check
         // panic_if_incoherent(&p, &solution);
-        if USE_BCP{
+        if h.use_bcp(){
             while !boolean_constant_propagation(&mut p, &mut solution, &mut h) {
                 let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
                 if !resolved_all_conflicts {
@@ -128,9 +128,9 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
         heuristics.assign_variable(ass_v);
         
         mark_variable_assigned(problem, ass_v);
-        update_literal_info(problem, ass_v, ass_p, UpdateLiteralInfoCause::UnitClauseImplication);
+        update_literal_info(problem, ass_v, ass_p, UpdateLiteralInfoCause::UnitClauseImplication, heuristics);
         
-        if USE_BCP{
+        if heuristics.use_bcp(){
             while !boolean_constant_propagation(problem, solution, heuristics) {
                 let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
                 if !resolved_all_conflicts {
@@ -206,7 +206,7 @@ pub enum UpdateLiteralInfoCause{
 /// Updates LiteralInfo for the affected literals; if this assignment has the
 /// possibility of making a Clause UNSAT, add the Clause to
 /// list_of_clauses_to_check .
-pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, cause: UpdateLiteralInfoCause) {
+pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, cause: UpdateLiteralInfoCause, heuristics: &impl Heuristics) {
     // for both literals (on and off),
     // - update their state from Unknown to Sat/Unsat
     // - and update their Clauses' status
@@ -254,7 +254,7 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
         // For the UNSAT literal, it has the potential of changing a clause's
         // state. 
         li_mut_borrow.list_of_clauses.iter().for_each(|rc| {
-            if USE_BCP {
+            if heuristics.use_bcp() {
                 if rc.borrow().hits_watch_literals(opposite_pol_literal) {
                     problem.list_of_clauses_to_check.insert(Rc::clone(rc)); 
                 }
@@ -326,7 +326,7 @@ pub fn boolean_constant_propagation(
             heuristics.assign_variable(v);
 
             mark_variable_assigned(problem, v);
-            update_literal_info(problem, v, p, UpdateLiteralInfoCause::BCPImplication); // adds clauses to list_of_clauses_to_check
+            update_literal_info(problem, v, p, UpdateLiteralInfoCause::BCPImplication, heuristics); // adds clauses to list_of_clauses_to_check
         }
     }
 
@@ -343,7 +343,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
     solution_stack: &mut SolutionStack,
     heuristics: &mut impl Heuristics
 ) -> bool {
-    if !USE_BCP{
+    if !heuristics.use_bcp(){
         // do we even have an unsatiafiable clause?
         let mut found_unsat = false;
         while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
@@ -463,12 +463,12 @@ pub fn udpate_clause_state_and_resolve_conflict(
         let var = last_step.assignment.variable;
         let new_pol = last_step.assignment.polarity;
 
-        update_literal_info(problem, var, new_pol, UpdateLiteralInfoCause::Backtrack);
+        update_literal_info(problem, var, new_pol, UpdateLiteralInfoCause::Backtrack, heuristics);
 
         trace!(target: "backtrack", "solution stack: {:?}", solution_stack);
         // panic_if_incoherent(problem, solution_stack);
 
-        if USE_BCP {
+        if heuristics.use_bcp() {
             return true;
         }
 

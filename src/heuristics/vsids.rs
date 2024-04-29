@@ -10,6 +10,7 @@ pub struct VSIDS {
     pub counter_literal_assigned : BTreeSet<(u32, Literal)>,
     pub counter_literal_unassigned : BTreeSet<(u32, Literal)>,
     pub iteration : u32,
+    use_bcp: bool
 }
 
 impl Debug for VSIDS {
@@ -31,6 +32,7 @@ impl Heuristics for VSIDS {
             counter_literal_assigned: BTreeSet::<(u32, Literal)>::new(),
             counter_literal_unassigned: BTreeSet::<(u32, Literal)>::new(),
             iteration: 1,
+            use_bcp: false
         }
     }
     
@@ -104,4 +106,10 @@ impl Heuristics for VSIDS {
         }
         trace!(target: "vsids", "VSIDS: assign variable {var:?}");
     }
+
+    fn set_use_bcp(&mut self, _use_bcp: bool){
+        self.use_bcp = _use_bcp;
+    }
+
+    fn use_bcp(&self) -> bool { self.use_bcp }
 }

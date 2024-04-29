@@ -8,6 +8,7 @@ use core::fmt;
 pub struct Ascending {
     pub variable_unassigned: BTreeSet<Variable>,
     pub variable_assigned: BTreeSet<Variable>,
+    use_bcp: bool
 }
 
 impl Debug for Ascending {
@@ -29,6 +30,7 @@ impl Heuristics for Ascending {
         Ascending {
             variable_unassigned: BTreeSet::<Variable>::new(),
             variable_assigned: BTreeSet::<Variable>::new(),
+            use_bcp: false
         }
     }
 
@@ -64,4 +66,11 @@ impl Heuristics for Ascending {
         self.variable_assigned.insert(var);
         trace!(target: "heuristics", "Ascending: assign variable {var:?}");
     }
+
+
+    fn set_use_bcp(&mut self, _use_bcp: bool){
+        self.use_bcp = _use_bcp;
+    }
+
+    fn use_bcp(&self) -> bool { self.use_bcp }
 }
