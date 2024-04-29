@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::rc::Rc;
+use log::info;
 
 use crate::sat_solver::*;
 use std::collections::{HashMap, BTreeSet};
