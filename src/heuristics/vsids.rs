@@ -87,9 +87,10 @@ impl Heuristics for VSIDS {
         let v0 = Literal {variable: var, polarity: Polarity::Off};
         let v1 = Literal {variable: var, polarity: Polarity::On};
         for l in [v0, v1] {
-            let counter = self.literal_counter.get(&l).unwrap().clone();
-            assert!(self.counter_literal_assigned.remove(&(counter, l)));
-            assert!(self.counter_literal_unassigned.insert((counter, l)));
+            if let Some(counter) = self.literal_counter.get(&l){
+                assert!(self.counter_literal_assigned.remove(&(*counter, l)));
+                assert!(self.counter_literal_unassigned.insert((*counter, l)));
+            }
         }
         trace!(target: "vsids", "VSIDS: unassign variable {var:?}");
     }
@@ -100,9 +101,10 @@ impl Heuristics for VSIDS {
         let v0 = Literal {variable: var, polarity: Polarity::Off};
         let v1 = Literal {variable: var, polarity: Polarity::On};
         for l in [v0, v1] {
-            let counter = self.literal_counter.get(&l).unwrap().clone();
-            assert!(self.counter_literal_unassigned.remove(&(counter, l)));
-            assert!(self.counter_literal_assigned.insert((counter, l)));
+            if let Some(counter) = self.literal_counter.get(&l) {
+                assert!(self.counter_literal_unassigned.remove(&(*counter, l)));
+                assert!(self.counter_literal_assigned.insert((*counter, l)));
+            }
         }
         trace!(target: "vsids", "VSIDS: assign variable {var:?}");
     }
