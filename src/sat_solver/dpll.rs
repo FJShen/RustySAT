@@ -1,9 +1,8 @@
-use crate::heuristics::{self, heuristics::Heuristics};
+use crate::heuristics::heuristics::Heuristics;
 
 use super::*;
-use std::{cell::Ref, collections::BTreeSet};
+use log::{info, trace};
 use tailcall::tailcall;
-use log::{info, log_enabled, trace};
 
 // If the problem is UNSAT, we will return None
 pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
@@ -26,10 +25,16 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
     // Resolve all variables before we return a solution
 
     let ret = force_assignment_for_unit_clauses(&mut p, &mut solution, &mut h);
-    if !ret {return None;}
+    if !ret {
+        return None;
+    }
     trace!(target: "dpll", "solution stack: {:?}", solution);
 
-    while let Some(Literal{variable: var, polarity: pol}) = h.decide() {
+    while let Some(Literal {
+        variable: var,
+        polarity: pol,
+    }) = h.decide()
+    {
         solution.push_free_choice_first_try(var, pol);
         trace!(target: "dpll", "Assigning variable {:?}", var);
         trace!(target: "dpll", "solution stack: {:?}", solution);
@@ -39,19 +44,21 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
 
         // sanity check
         // panic_if_incoherent(&p, &solution);
-        if h.use_bcp(){
+        if h.use_bcp() {
             while !boolean_constant_propagation(&mut p, &mut solution, &mut h) {
-                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
+                let resolved_all_conflicts =
+                    udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
                 if !resolved_all_conflicts {
                     return None;
-                } 
+                }
             }
             trace!(target: "bcp", "No more implications");
         } else {
-            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
+            let resolved_all_conflicts =
+                udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
             if !resolved_all_conflicts {
                 return None;
-            }            
+            }
             trace!(target: "dpll", "All conflicts cleared.")
         }
     }
@@ -66,30 +73,33 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
 ////////////////////////////////////////////////////////
 
 /// Called once right after reading the problem from file. Aims to identify unit
-/// clauses and give them an assignment. 
+/// clauses and give them an assignment.
 /// This is function is necessary because the two-watch-variable algorithm used
 /// for BCP requires each clause to have at least two variables.  
-/// Returns true if no conflict occur during the call. 
-/// 
+/// Returns true if no conflict occur during the call.
+///
 /// Overview
-/// 1. Scan all clauses to hunt for unit clauses 
+/// 1. Scan all clauses to hunt for unit clauses
 /// 1.1 Take note of variables and polarities to force-assign
 /// 1.2 Make sure no variable is forced to be both On and Off
 /// 2. Assign one variable at a time, performing BCP and conflict resolution
 ///    along the way
 /// 2.1 This step is much like how freely-assigned variables are handled.  
-pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut SolutionStack,
-    heuristics: &mut impl Heuristics) -> bool{
-
+pub fn force_assignment_for_unit_clauses(
+    problem: &mut Problem,
+    solution: &mut SolutionStack,
+    heuristics: &mut impl Heuristics,
+) -> bool {
     // Go over all clauses, hunt for those that have only one literal
-    let it_literals_to_force = problem.list_of_clauses
+    let it_literals_to_force = problem
+        .list_of_clauses
         .iter()
-        .filter(|rc|rc.borrow().list_of_literals.len() == 1)
-        .map(|rc|rc.borrow().list_of_literals[0]);
+        .filter(|rc| rc.borrow().list_of_literals.len() == 1)
+        .map(|rc| rc.borrow().list_of_literals[0]);
 
-    let mut _temp_assignment_map = BTreeMap::<Variable,Polarity>::new();
+    let mut _temp_assignment_map = BTreeMap::<Variable, Polarity>::new();
     let mut ret = true;
-    for l in it_literals_to_force{
+    for l in it_literals_to_force {
         let this_v = l.variable;
         let this_p = l.polarity;
 
@@ -100,18 +110,20 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
                     trace!(target: "unit_clause", "Variable {:?} appeared with both polarities in various unit clauses", this_v);
                     ret = false;
                     break;
-                } 
-            } 
+                }
+            }
             None => {
                 _temp_assignment_map.insert(this_v, this_p);
                 trace!(target: "unit_clause", "Variable {:?} implied to be {:?}", this_v, this_p);
             }
         }
-    };
+    }
 
-    if !ret {return false;}
+    if !ret {
+        return false;
+    }
 
-    while let Some((ass_v, ass_p)) = _temp_assignment_map.pop_first(){
+    while let Some((ass_v, ass_p)) = _temp_assignment_map.pop_first() {
         // it's possible a variable has already been implied during the BCP
         // phase
         if problem.list_of_variables[&ass_v] == VariableState::Assigned {
@@ -126,62 +138,36 @@ pub fn force_assignment_for_unit_clauses(problem: &mut Problem, solution: &mut S
         trace!(target: "unit_clause", "solution stack: {:?}", solution);
 
         heuristics.assign_variable(ass_v);
-        
+
         mark_variable_assigned(problem, ass_v);
-        update_literal_info(problem, ass_v, ass_p, UpdateLiteralInfoCause::UnitClauseImplication, heuristics);
-        
-        if heuristics.use_bcp(){
+        update_literal_info(
+            problem,
+            ass_v,
+            ass_p,
+            UpdateLiteralInfoCause::UnitClauseImplication,
+            heuristics,
+        );
+
+        if heuristics.use_bcp() {
             while !boolean_constant_propagation(problem, solution, heuristics) {
-                let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
+                let resolved_all_conflicts =
+                    udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
                 if !resolved_all_conflicts {
                     return false;
-                } 
+                }
             }
             trace!(target: "bcp", "No more implications");
         } else {
-            let resolved_all_conflicts = udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
+            let resolved_all_conflicts =
+                udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
             if !resolved_all_conflicts {
                 return false;
-            }            
+            }
             trace!(target: "dpll", "All conflicts cleared.")
         }
     }
 
     return true;
-}
-
-/// Returns a variable that is unresolved, and a recommendation for which
-/// polarity to use. If all variables have been resolved, returns None.  
-pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)> {
-    // heuristic: pick an unassigned variable that appears in the most amount
-    // of clauses.
-    let tuple_result: Option<(Variable, usize, usize)> = problem
-        .list_of_variables
-        .iter()
-        .filter(|(v, vs)| **vs == VariableState::Unassigned)
-        .map(|(v, vs)| {
-            let mut on_count: usize = 0;
-            let mut off_count: usize = 0;
-            if let Some(li) = problem.list_of_literal_infos.get(
-                &Literal { variable: *v, polarity: Polarity::On }){
-                on_count = li.borrow().list_of_clauses.len();
-            }
-            if let Some(li) = problem.list_of_literal_infos.get(
-                &Literal { variable: *v, polarity: Polarity::Off }){
-                off_count = li.borrow().list_of_clauses.len();
-            }
-            (*v, on_count, off_count)
-        })
-        .max_by_key(|(v, on_count, off_count)| on_count + off_count);
-
-    if let Some((v, on_count, off_count)) = tuple_result{
-        if on_count > off_count {
-            return Some((v, Polarity::On));
-        } else {
-            return Some((v, Polarity::Off));
-        }  
-    } else {return None;}
-
 }
 
 pub fn mark_variable_assigned(problem: &mut Problem, v: Variable) {
@@ -196,17 +182,23 @@ pub fn mark_variable_unassigned(problem: &mut Problem, v: Variable) {
     *vs = VariableState::Unassigned;
 }
 
-pub enum UpdateLiteralInfoCause{
+pub enum UpdateLiteralInfoCause {
     FreeAssignment,
     Backtrack,
     BCPImplication,
-    UnitClauseImplication
+    UnitClauseImplication,
 }
 
 /// Updates LiteralInfo for the affected literals; if this assignment has the
 /// possibility of making a Clause UNSAT, add the Clause to
 /// list_of_clauses_to_check .
-pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, cause: UpdateLiteralInfoCause, heuristics: &impl Heuristics) {
+pub fn update_literal_info(
+    problem: &mut Problem,
+    v: Variable,
+    p: Polarity,
+    cause: UpdateLiteralInfoCause,
+    heuristics: &impl Heuristics,
+) {
     // for both literals (on and off),
     // - update their state from Unknown to Sat/Unsat
     // - and update their Clauses' status
@@ -219,18 +211,24 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
     if let Some(li) = problem.list_of_literal_infos.get(&same_pol_literal) {
         let status_ref = &mut li.borrow_mut().status;
         match cause {
-            UpdateLiteralInfoCause::FreeAssignment |
-            UpdateLiteralInfoCause::BCPImplication |
-            UpdateLiteralInfoCause::UnitClauseImplication => {
-                assert!(*status_ref == LiteralState::Unknown, "literal must not be Sat/Unsat");
-            },
+            UpdateLiteralInfoCause::FreeAssignment
+            | UpdateLiteralInfoCause::BCPImplication
+            | UpdateLiteralInfoCause::UnitClauseImplication => {
+                assert!(
+                    *status_ref == LiteralState::Unknown,
+                    "literal must not be Sat/Unsat"
+                );
+            }
             UpdateLiteralInfoCause::Backtrack => {
-                assert!(*status_ref == LiteralState::Unsat, "literal must not be Unknown/Sat");
-            },
+                assert!(
+                    *status_ref == LiteralState::Unsat,
+                    "literal must not be Unknown/Sat"
+                );
+            }
         }
         *status_ref = LiteralState::Sat;
     }
-    
+
     // opposite polarity: becomes Unsat
     let opposite_pol_literal = Literal {
         variable: v,
@@ -240,42 +238,48 @@ pub fn update_literal_info(problem: &mut Problem, v: Variable, p: Polarity, caus
         let mut li_mut_borrow = li.borrow_mut();
         let status_ref = &mut li_mut_borrow.status;
         match cause {
-            UpdateLiteralInfoCause::FreeAssignment |
-            UpdateLiteralInfoCause::BCPImplication |
-            UpdateLiteralInfoCause::UnitClauseImplication => {
-                assert!(*status_ref == LiteralState::Unknown, "literal must not be Sat/Unsat");
-            },
+            UpdateLiteralInfoCause::FreeAssignment
+            | UpdateLiteralInfoCause::BCPImplication
+            | UpdateLiteralInfoCause::UnitClauseImplication => {
+                assert!(
+                    *status_ref == LiteralState::Unknown,
+                    "literal must not be Sat/Unsat"
+                );
+            }
             UpdateLiteralInfoCause::Backtrack => {
-                assert!(*status_ref == LiteralState::Sat, "literal must not be Unknown/Unsat");
-            },
+                assert!(
+                    *status_ref == LiteralState::Sat,
+                    "literal must not be Unknown/Unsat"
+                );
+            }
         }
         *status_ref = LiteralState::Unsat;
-        
+
         // For the UNSAT literal, it has the potential of changing a clause's
-        // state. 
+        // state.
         li_mut_borrow.list_of_clauses.iter().for_each(|rc| {
             if heuristics.use_bcp() {
                 if rc.borrow().hits_watch_literals(opposite_pol_literal) {
-                    problem.list_of_clauses_to_check.insert(Rc::clone(rc)); 
+                    problem.list_of_clauses_to_check.insert(Rc::clone(rc));
                 }
             } else {
-                problem.list_of_clauses_to_check.insert(Rc::clone(rc));  
+                problem.list_of_clauses_to_check.insert(Rc::clone(rc));
             }
         });
     }
 }
 
-/// Called after assigning a variable, or performing a backtrack. 
+/// Called after assigning a variable, or performing a backtrack.
 /// Returns true if no more implications can be made; returns false if a
-/// variable is implied to be both On and Off. 
+/// variable is implied to be both On and Off.
 pub fn boolean_constant_propagation(
     problem: &mut Problem,
-    solution: &mut SolutionStack, heuristics: &mut impl Heuristics
+    solution: &mut SolutionStack,
+    heuristics: &mut impl Heuristics,
 ) -> bool {
     let mut implied_assignments = BTreeMap::<Variable, Polarity>::new();
 
     while problem.list_of_clauses_to_check.len() > 0 || implied_assignments.len() > 0 {
-
         // Examine each clause, we either find a substitute variable to watch, or
         // are forced to assign the other watch variable.
         while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
@@ -289,8 +293,8 @@ pub fn boolean_constant_propagation(
                     trace!(target: "bcp", "{:?}", c);
                     return false;
                 }
-                BCPSubstituteWatchLiteralResult::ForcedAssignment{l} => {
-                    let mut conflict=false;
+                BCPSubstituteWatchLiteralResult::ForcedAssignment { l } => {
+                    let mut conflict = false;
 
                     implied_assignments.entry(l.variable)
                         .and_modify(|p|{ // we aren't really modifying anything
@@ -309,15 +313,17 @@ pub fn boolean_constant_propagation(
                             trace!(target: "bcp", "{:?}", c);
                             l.polarity
                         });
-                    if conflict {return false;}
+                    if conflict {
+                        return false;
+                    }
                 }
                 _ => {}
             }
         }
 
         // At this point, we have finished examining all clauses affected by a
-        // literal assignment, but we end up with a list of more implied assignments.   
-        // We try those implied assignments one at a time. 
+        // literal assignment, but we end up with a list of more implied assignments.
+        // We try those implied assignments one at a time.
         if let Some((v, p)) = implied_assignments.pop_first() {
             solution.push_step(v, p, SolutionStepType::ForcedAtBCP);
             trace!(target: "bcp", "Assinging variable {:?}", v);
@@ -326,10 +332,15 @@ pub fn boolean_constant_propagation(
             heuristics.assign_variable(v);
 
             mark_variable_assigned(problem, v);
-            update_literal_info(problem, v, p, UpdateLiteralInfoCause::BCPImplication, heuristics); // adds clauses to list_of_clauses_to_check
+            update_literal_info(
+                problem,
+                v,
+                p,
+                UpdateLiteralInfoCause::BCPImplication,
+                heuristics,
+            ); // adds clauses to list_of_clauses_to_check
         }
     }
-
 
     return true;
 }
@@ -339,11 +350,11 @@ pub fn boolean_constant_propagation(
 /// a variable but neither works).
 #[tailcall]
 pub fn udpate_clause_state_and_resolve_conflict(
-    problem: &mut Problem, 
+    problem: &mut Problem,
     solution_stack: &mut SolutionStack,
-    heuristics: &mut impl Heuristics
+    heuristics: &mut impl Heuristics,
 ) -> bool {
-    if !heuristics.use_bcp(){
+    if !heuristics.use_bcp() {
         // do we even have an unsatiafiable clause?
         let mut found_unsat = false;
         while let Some(rc) = problem.list_of_clauses_to_check.pop_first() {
@@ -374,7 +385,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
         if !found_unsat {
             trace!(target: "backtrack", "All conflicts resolved.");
             return true;
-        }        
+        }
     }
 
     // We do have a conflict. Backtrack!
@@ -447,7 +458,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
 
         // There may be leftover clauses, but we have backtracked, which means
         // the very assignment that caused any Clause to be added to this list
-        // have been invalidated, so it's okay to just clear the worklist. 
+        // have been invalidated, so it's okay to just clear the worklist.
         problem.list_of_clauses_to_check.clear();
 
         // Reverse the polarity of the last element in the current solution
@@ -463,7 +474,13 @@ pub fn udpate_clause_state_and_resolve_conflict(
         let var = last_step.assignment.variable;
         let new_pol = last_step.assignment.polarity;
 
-        update_literal_info(problem, var, new_pol, UpdateLiteralInfoCause::Backtrack, heuristics);
+        update_literal_info(
+            problem,
+            var,
+            new_pol,
+            UpdateLiteralInfoCause::Backtrack,
+            heuristics,
+        );
 
         trace!(target: "backtrack", "solution stack: {:?}", solution_stack);
         // panic_if_incoherent(problem, solution_stack);
@@ -474,6 +491,49 @@ pub fn udpate_clause_state_and_resolve_conflict(
 
         // recursively call into this function to resolve any new conflicts
         return udpate_clause_state_and_resolve_conflict(problem, solution_stack, heuristics);
+    }
+}
+
+///
+/// OBSOLETE METHODS BELOW
+///
+
+/// Returns a variable that is unresolved, and a recommendation for which
+/// polarity to use. If all variables have been resolved, returns None.  
+pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)> {
+    // heuristic: pick an unassigned variable that appears in the most amount
+    // of clauses.
+    let tuple_result: Option<(Variable, usize, usize)> = problem
+        .list_of_variables
+        .iter()
+        .filter(|(v, vs)| **vs == VariableState::Unassigned)
+        .map(|(v, vs)| {
+            let mut on_count: usize = 0;
+            let mut off_count: usize = 0;
+            if let Some(li) = problem.list_of_literal_infos.get(&Literal {
+                variable: *v,
+                polarity: Polarity::On,
+            }) {
+                on_count = li.borrow().list_of_clauses.len();
+            }
+            if let Some(li) = problem.list_of_literal_infos.get(&Literal {
+                variable: *v,
+                polarity: Polarity::Off,
+            }) {
+                off_count = li.borrow().list_of_clauses.len();
+            }
+            (*v, on_count, off_count)
+        })
+        .max_by_key(|(v, on_count, off_count)| on_count + off_count);
+
+    if let Some((v, on_count, off_count)) = tuple_result {
+        if on_count > off_count {
+            return Some((v, Polarity::On));
+        } else {
+            return Some((v, Polarity::Off));
+        }
+    } else {
+        return None;
     }
 }
 

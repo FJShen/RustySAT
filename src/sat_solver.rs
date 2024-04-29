@@ -15,8 +15,11 @@ mod sat_structures;
 ////////////////////////////////////////////////////////
 // Data structures for the SAT Problem
 ////////////////////////////////////////////////////////
-pub static NULL_VARIABLE: Variable = Variable{index: 0};
-pub static NULL_LITERAL: Literal = Literal{variable: NULL_VARIABLE, polarity: Polarity::Off};
+pub static NULL_VARIABLE: Variable = Variable { index: 0 };
+pub static NULL_LITERAL: Literal = Literal {
+    variable: NULL_VARIABLE,
+    polarity: Polarity::Off,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Variable {
@@ -50,7 +53,7 @@ pub enum Polarity {
 
 static CLAUSE_COUNTER: CounterU32 = CounterU32::new(0);
 
-#[derive( PartialEq, Eq, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clause {
     pub id: u32,
     // pub status: ClauseState,
@@ -72,11 +75,11 @@ pub struct LiteralInfo {
     pub list_of_clauses: Vec<Rc<RefCell<Clause>>>,
 }
 
-pub enum BCPSubstituteWatchLiteralResult{
+pub enum BCPSubstituteWatchLiteralResult {
     FoundSubstitute,
     ClauseIsSAT,
     UnitClauseUnsat,
-    ForcedAssignment{l: Literal}
+    ForcedAssignment { l: Literal },
 }
 
 #[derive(Debug)]
@@ -93,11 +96,11 @@ pub struct Problem {
     //
     // A clause can be added to this container when we (1) assign a new variable
     // or (2) backtrack a past assignment.
-    // 
+    //
     // One invariant holds: any Clause that "might" be in Unsatisfiable state
     // must be in this container. I.e., if a clause is not in this container, it
-    // is certainly not Unsatisfiable. 
-    // Corollary: This list must be empty when the solver declares SAT. 
+    // is certainly not Unsatisfiable.
+    // Corollary: This list must be empty when the solver declares SAT.
     pub list_of_clauses_to_check: BTreeSet<Rc<RefCell<Clause>>>,
 }
 
@@ -127,7 +130,7 @@ pub enum SolutionStepType {
     // forced due to BCP
     ForcedAtBCP,
     // forced due to it belonging to a unit clause
-    ForcedAtInit
+    ForcedAtInit,
 }
 
 #[derive(Debug)]

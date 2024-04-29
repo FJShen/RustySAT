@@ -1,14 +1,14 @@
-use std::collections::BTreeSet;
-use crate::sat_solver::*;
 use crate::heuristics::heuristics::*;
-use log::trace;
-use std::fmt::Debug;
+use crate::sat_solver::*;
 use core::fmt;
+use log::trace;
+use std::collections::BTreeSet;
+use std::fmt::Debug;
 
 pub struct Ascending {
     pub variable_unassigned: BTreeSet<Variable>,
     pub variable_assigned: BTreeSet<Variable>,
-    use_bcp: bool
+    use_bcp: bool,
 }
 
 impl Debug for Ascending {
@@ -30,7 +30,7 @@ impl Heuristics for Ascending {
         Ascending {
             variable_unassigned: BTreeSet::<Variable>::new(),
             variable_assigned: BTreeSet::<Variable>::new(),
-            use_bcp: false
+            use_bcp: false,
         }
     }
 
@@ -47,7 +47,10 @@ impl Heuristics for Ascending {
         let last = self.variable_unassigned.pop_last();
         if let Some(variable) = last {
             self.variable_assigned.insert(variable);
-            let l = Literal {variable: variable, polarity: Polarity::On};
+            let l = Literal {
+                variable: variable,
+                polarity: Polarity::On,
+            };
             trace!(target: "heuristics", "Ascending: decide {:?}", l);
             return Some(l);
         }
@@ -55,22 +58,23 @@ impl Heuristics for Ascending {
         return None;
     }
 
-    fn unassign_variable(&mut self, var : Variable) {
+    fn unassign_variable(&mut self, var: Variable) {
         self.variable_assigned.remove(&var);
         self.variable_unassigned.insert(var);
         trace!(target: "heuristics", "Ascending: unassign variable {var:?}");
     }
 
-    fn assign_variable(&mut self, var : Variable) {
+    fn assign_variable(&mut self, var: Variable) {
         self.variable_unassigned.remove(&var);
         self.variable_assigned.insert(var);
         trace!(target: "heuristics", "Ascending: assign variable {var:?}");
     }
 
-
-    fn set_use_bcp(&mut self, _use_bcp: bool){
+    fn set_use_bcp(&mut self, _use_bcp: bool) {
         self.use_bcp = _use_bcp;
     }
 
-    fn use_bcp(&self) -> bool { self.use_bcp }
+    fn use_bcp(&self) -> bool {
+        self.use_bcp
+    }
 }

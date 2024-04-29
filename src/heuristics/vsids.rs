@@ -1,16 +1,16 @@
-use std::collections::{BTreeMap, BTreeSet};
-use crate::sat_solver::*;
 use crate::heuristics::heuristics::*;
-use log::trace;
-use std::fmt::Debug;
+use crate::sat_solver::*;
 use core::fmt;
+use log::trace;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Debug;
 
 pub struct VSIDS {
-    pub literal_counter : BTreeMap<Literal, u32>,
-    pub counter_literal_assigned : BTreeSet<(u32, Literal)>,
-    pub counter_literal_unassigned : BTreeSet<(u32, Literal)>,
-    pub iteration : u32,
-    use_bcp: bool
+    pub literal_counter: BTreeMap<Literal, u32>,
+    pub counter_literal_assigned: BTreeSet<(u32, Literal)>,
+    pub counter_literal_unassigned: BTreeSet<(u32, Literal)>,
+    pub iteration: u32,
+    use_bcp: bool,
 }
 
 impl Debug for VSIDS {
@@ -32,10 +32,10 @@ impl Heuristics for VSIDS {
             counter_literal_assigned: BTreeSet::<(u32, Literal)>::new(),
             counter_literal_unassigned: BTreeSet::<(u32, Literal)>::new(),
             iteration: 1,
-            use_bcp: false
+            use_bcp: false,
         }
     }
-    
+
     // add parsed or conflict clauses and add score of contained literals
     // literal assignment status will remain unchanged
     fn add_clause(&mut self, c: &Clause) {
@@ -67,27 +67,40 @@ impl Heuristics for VSIDS {
             let score_literal = score_literal.1;
             let compl_literal = Literal {
                 variable: score_literal.variable,
-                polarity: if score_literal.polarity == Polarity::Off  {Polarity::On} else {Polarity::Off},
+                polarity: if score_literal.polarity == Polarity::Off {
+                    Polarity::On
+                } else {
+                    Polarity::Off
+                },
             };
             if let Some(compl_literal_counter) = self.literal_counter.get(&compl_literal) {
-                assert!(self.counter_literal_unassigned.remove(&(*compl_literal_counter, compl_literal)));
-                assert!(self.counter_literal_assigned.insert((*compl_literal_counter, compl_literal)));
+                assert!(self
+                    .counter_literal_unassigned
+                    .remove(&(*compl_literal_counter, compl_literal)));
+                assert!(self
+                    .counter_literal_assigned
+                    .insert((*compl_literal_counter, compl_literal)));
             }
 
             trace!(target: "vsids", "VSIDS: decide {score_literal:?}");
             return Some(score_literal);
         }
-        
+
         return None;
     }
 
     // move a variable from assigned group to unassigned group
-    fn unassign_variable(&mut self, var : Variable) {
-
-        let v0 = Literal {variable: var, polarity: Polarity::Off};
-        let v1 = Literal {variable: var, polarity: Polarity::On};
+    fn unassign_variable(&mut self, var: Variable) {
+        let v0 = Literal {
+            variable: var,
+            polarity: Polarity::Off,
+        };
+        let v1 = Literal {
+            variable: var,
+            polarity: Polarity::On,
+        };
         for l in [v0, v1] {
-            if let Some(counter) = self.literal_counter.get(&l){
+            if let Some(counter) = self.literal_counter.get(&l) {
                 assert!(self.counter_literal_assigned.remove(&(*counter, l)));
                 assert!(self.counter_literal_unassigned.insert((*counter, l)));
             }
@@ -96,10 +109,15 @@ impl Heuristics for VSIDS {
     }
 
     // move a variable from assigned group to unassigned group
-    fn assign_variable(&mut self, var : Variable) {
-
-        let v0 = Literal {variable: var, polarity: Polarity::Off};
-        let v1 = Literal {variable: var, polarity: Polarity::On};
+    fn assign_variable(&mut self, var: Variable) {
+        let v0 = Literal {
+            variable: var,
+            polarity: Polarity::Off,
+        };
+        let v1 = Literal {
+            variable: var,
+            polarity: Polarity::On,
+        };
         for l in [v0, v1] {
             if let Some(counter) = self.literal_counter.get(&l) {
                 assert!(self.counter_literal_unassigned.remove(&(*counter, l)));
@@ -109,9 +127,11 @@ impl Heuristics for VSIDS {
         trace!(target: "vsids", "VSIDS: assign variable {var:?}");
     }
 
-    fn set_use_bcp(&mut self, _use_bcp: bool){
+    fn set_use_bcp(&mut self, _use_bcp: bool) {
         self.use_bcp = _use_bcp;
     }
 
-    fn use_bcp(&self) -> bool { self.use_bcp }
+    fn use_bcp(&self) -> bool {
+        self.use_bcp
+    }
 }
