@@ -62,7 +62,7 @@ RESULT: UNSAT
     data structure used by BCP).
   - sat_solver/
     - sat_structures.rs: Auxiliary methods for the 
-      data structures. 
+      data structures (e.g. debug-print format and checking if a clause is unsatisfiable). 
     - dpll.rs: Routines for the DPLL algorithm. Routines for BCP. 
   - heuristics.rs: Top level file for the module `heuristics`. 
   - heuristics/
@@ -101,7 +101,9 @@ objects that make up the clause;
 
 - A `Vec` of references (i.e. pointers) to
 heap-allocated `LiteralInfo` objects, each corresponding to a `Literal` object
-that appears in this clause. 
+that appears in this clause;
+
+- A two-element array of `Literal` objects, representing the two watch literals. 
 
 ### Problem
 **Purpose**: Represents the sat problem and current states of each variable and
@@ -142,3 +144,67 @@ to a heap-allocated `LiteralInfo` object
 assignments so far. 
 
 ## Functions
+### dpll
+Top-level function for the DPLL algorithm. Steps include:
+1. Pre-process the problem: identify Unit Clauses and force assign their
+   variables.
+    - If BCP is enabled, perform BCP for each forced assignment.
+2. Pick a variable to assign, using some heuristics.
+3. Update the problem
+    1. Update list of variables: mark one as Assigned
+    2. Update list of literals: mark one literal as Sat, and its complement as
+       Unsat
+    3. Update the state of each Clause associated with the literals touched in
+       the last step
+4. Resolve conflicts by performing backtrack if any clause is unsatisfiable.
+    - If BCP is enabled, first try to imply as many variables as possible. Only
+     backtrack when a variable is implied to be both on and off.
+      Repeat the "BCP-backtrack" loop until no more implications can be made.
+5. Repeat 2~4 until no variables are left to assign. 
+
+#### force_assignment_for_unit_clauses
+Called once at the beginning of the DPLL algorithm. 
+
+Scans the list of clauses to search for unit clauses. Put all involved literals
+in a set. Then iteratively push the forced assignments onto the solution stack
+while performing BCP after each assignment. 
+
+#### update_literal_info
+Called every time a variable changes state (being assigned/unassigned, or having
+its assigned polarity flipped), hence this method is used in many places: when
+we pick a variable to assign at-will, during BCP, during backtracking, and
+during the initial force assignment of unit clause variables. 
+
+Aside from updating the state saved in `LiteralInfo`, it also inserts all
+`Clause` objects referenced by the `Literal` which becomes unsatisfied into
+`list_of_clauses_to_check` (when BCP is enabled, only insert when the literal is
+one of the two watch variables).  
+
+#### udpate_clause_state_and_resolve_conflict
+When BCP is not enabled, it pops every `Clause` object reference from
+`list_of_clauses_to_check` and calculates if it is satisfied, unresolved, or
+unsatisfiable. If no clause is unsatisfiable, then there is no need to backtrack.
+
+In the case of a unsatisfiable clause, the solver drops all remaining `Clause`
+object references from `list_of_clauses_to_check` and starts backtracking. The
+last at-will assignment which has not been flipped is flipped, the clauses that
+contain the unsatisfied literal are added to `list_of_clauses_to_check`, and this method
+is called in a tail-recursive fashion: as long as one clause proves to be
+unsatisfiable, backtrack and flip the last "first-try" assignment. 
+
+When BCP is enabled, only a portion of code in this method is run: backtracking
+of implied/"second-try" assignments on the stack till the last "first-try"
+assignment and flip. It will not call itself recursively nor will it
+pop and check any clause from `list_of_clauses_to_check`. More on this in the
+description for `boolean_constant_propagation`.
+
+#### boolean_constant_propagation
+When BCP is enabled, this method takes over the role from
+`udpate_clause_state_and_resolve_conflict` of checking if each clause becomes
+unsatisfiable. It pops clauses from `list_of_clauses_to_check` and see if they
+has become unsatisfied. If a clause is still unresolved but more than one
+literals are unresolved, the current watch literals are updated; if a clause is
+still unresolved but only one literal (one of the watch literals) remains
+unresolved, force-assign that literal; if the clause is
+unsatisfiable, then transfer control to
+`udpate_clause_state_and_resolve_conflict` to perform backtracking.
