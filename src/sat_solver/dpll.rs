@@ -1,12 +1,16 @@
-use crate::heuristics::heuristics::Heuristics;
+use crate::{heuristics::heuristics::Heuristics, profiler::SolverProfiler};
 
 use super::*;
 use log::{info, trace};
-use tailcall::tailcall;
 use std::collections::BTreeMap;
+use tailcall::tailcall;
 
 // If the problem is UNSAT, we will return None
-pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
+pub fn dpll(
+    mut p: Problem,
+    mut h: impl Heuristics,
+    prof: &mut SolverProfiler,
+) -> Option<SolutionStack> {
     let mut solution = SolutionStack { stack: vec![] };
 
     // Baseline DPLL
@@ -25,7 +29,7 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
     // 4. Repeat
     // Resolve all variables before we return a solution
 
-    let ret = force_assignment_for_unit_clauses(&mut p, &mut solution, &mut h);
+    let ret = force_assignment_for_unit_clauses(&mut p, &mut solution, &mut h, prof);
     if !ret {
         return None;
     }
@@ -42,13 +46,14 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
 
         mark_variable_assigned(&mut p, var);
         update_literal_info(&mut p, var, pol, UpdateLiteralInfoCause::FreeAssignment, &h);
+        prof.bump_free_decisions();
 
         // sanity check
         // panic_if_incoherent(&p, &solution);
         if h.use_bcp() {
-            while !boolean_constant_propagation(&mut p, &mut solution, &mut h) {
+            while !boolean_constant_propagation(&mut p, &mut solution, &mut h, prof) {
                 let resolved_all_conflicts =
-                    udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
+                    udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
                 if !resolved_all_conflicts {
                     return None;
                 }
@@ -56,7 +61,7 @@ pub fn dpll(mut p: Problem, mut h: impl Heuristics) -> Option<SolutionStack> {
             trace!(target: "bcp", "No more implications");
         } else {
             let resolved_all_conflicts =
-                udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h);
+                udpate_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
             if !resolved_all_conflicts {
                 return None;
             }
@@ -90,6 +95,7 @@ pub fn force_assignment_for_unit_clauses(
     problem: &mut Problem,
     solution: &mut SolutionStack,
     heuristics: &mut impl Heuristics,
+    prof: &mut SolverProfiler,
 ) -> bool {
     // Go over all clauses, hunt for those that have only one literal
     let it_literals_to_force = problem
@@ -148,11 +154,12 @@ pub fn force_assignment_for_unit_clauses(
             UpdateLiteralInfoCause::UnitClauseImplication,
             heuristics,
         );
+        prof.bump_implied_decisions();
 
         if heuristics.use_bcp() {
-            while !boolean_constant_propagation(problem, solution, heuristics) {
+            while !boolean_constant_propagation(problem, solution, heuristics, prof) {
                 let resolved_all_conflicts =
-                    udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
+                    udpate_clause_state_and_resolve_conflict(problem, solution, heuristics, prof);
                 if !resolved_all_conflicts {
                     return false;
                 }
@@ -160,7 +167,7 @@ pub fn force_assignment_for_unit_clauses(
             trace!(target: "bcp", "No more implications");
         } else {
             let resolved_all_conflicts =
-                udpate_clause_state_and_resolve_conflict(problem, solution, heuristics);
+                udpate_clause_state_and_resolve_conflict(problem, solution, heuristics, prof);
             if !resolved_all_conflicts {
                 return false;
             }
@@ -277,6 +284,7 @@ pub fn boolean_constant_propagation(
     problem: &mut Problem,
     solution: &mut SolutionStack,
     heuristics: &mut impl Heuristics,
+    prof: &mut SolverProfiler,
 ) -> bool {
     let mut implied_assignments = BTreeMap::<Variable, Polarity>::new();
 
@@ -340,6 +348,7 @@ pub fn boolean_constant_propagation(
                 UpdateLiteralInfoCause::BCPImplication,
                 heuristics,
             ); // adds clauses to list_of_clauses_to_check
+            prof.bump_implied_decisions();
         }
     }
 
@@ -354,6 +363,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
     problem: &mut Problem,
     solution_stack: &mut SolutionStack,
     heuristics: &mut impl Heuristics,
+    prof: &mut SolverProfiler,
 ) -> bool {
     if !heuristics.use_bcp() {
         // do we even have an unsatiafiable clause?
@@ -431,6 +441,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
                 // May panic in the unlikely event var does not exist in
                 // list_of_variables
                 mark_variable_unassigned(problem, var);
+                prof.bump_backtracked_decisions();
 
                 // update the list_of_literal_infos
                 if let Some(li) = problem.list_of_literal_infos.get(&Literal {
@@ -482,6 +493,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
             UpdateLiteralInfoCause::Backtrack,
             heuristics,
         );
+        prof.bump_flipped_decisions();
 
         trace!(target: "backtrack", "solution stack: {:?}", solution_stack);
         // panic_if_incoherent(problem, solution_stack);
@@ -491,7 +503,7 @@ pub fn udpate_clause_state_and_resolve_conflict(
         }
 
         // recursively call into this function to resolve any new conflicts
-        return udpate_clause_state_and_resolve_conflict(problem, solution_stack, heuristics);
+        return udpate_clause_state_and_resolve_conflict(problem, solution_stack, heuristics, prof);
     }
 }
 

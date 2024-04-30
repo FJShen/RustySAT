@@ -1,10 +1,12 @@
 mod heuristics;
 mod parser;
+mod profiler;
 mod sat_solver;
 use clap::Parser;
 use log::{info, trace};
 
 use crate::heuristics::{ascending::Ascending, heuristics::Heuristics, vsids::VSIDS};
+use crate::profiler::SolverProfiler;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -20,20 +22,24 @@ struct Args {
 
 fn test_ascending(input: String, use_bcp: bool) {
     let mut h = Ascending::new();
+    let mut prof = SolverProfiler::new();
     h.set_use_bcp(use_bcp);
     let p = parser::parse(&input, &mut h);
     trace!(target: "solver", "problem is: {:#?}", p);
-    let solution = sat_solver::dpll::dpll(p, h);
+    let solution = sat_solver::dpll::dpll(p, h, &mut prof);
     info!(target: "solver", "solution is {:?}", solution);
+    info!(target: "profiler", "Profiling results: {:?}", prof);
 }
 
 fn test_vsids(input: String, use_bcp: bool) {
     let mut h = VSIDS::new();
+    let mut prof = SolverProfiler::new();
     h.set_use_bcp(use_bcp);
     let p = parser::parse(&input, &mut h);
     trace!(target: "solver", "problem is: {:#?}", p);
-    let solution = sat_solver::dpll::dpll(p, h);
+    let solution = sat_solver::dpll::dpll(p, h, &mut prof);
     info!(target: "solver", "solution is {:?}", solution);
+    info!(target: "profiler", "Profiling results: {:?}", prof);
 }
 
 fn main() {
