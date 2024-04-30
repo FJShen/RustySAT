@@ -26,9 +26,11 @@ fn test_ascending(input: String, use_bcp: bool) {
     h.set_use_bcp(use_bcp);
     let p = parser::parse(&input, &mut h);
     trace!(target: "solver", "problem is: {:#?}", p);
+    prof.reset_start_time();
     let solution = sat_solver::dpll::dpll(p, h, &mut prof);
+    prof.calc_duration_till_now();
     info!(target: "solver", "solution is {:?}", solution);
-    info!(target: "profiler", "Profiling results: {:?}", prof);
+    info!(target: "profiler", "Profiling results: {}", prof);
 }
 
 fn test_vsids(input: String, use_bcp: bool) {
@@ -37,9 +39,11 @@ fn test_vsids(input: String, use_bcp: bool) {
     h.set_use_bcp(use_bcp);
     let p = parser::parse(&input, &mut h);
     trace!(target: "solver", "problem is: {:#?}", p);
+    prof.reset_start_time();
     let solution = sat_solver::dpll::dpll(p, h, &mut prof);
+    prof.calc_duration_till_now();
     info!(target: "solver", "solution is {:?}", solution);
-    info!(target: "profiler", "Profiling results: {:?}", prof);
+    info!(target: "profiler", "Profiling results: {}", prof);
 }
 
 fn main() {
