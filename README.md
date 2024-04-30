@@ -31,14 +31,16 @@ Current installation options:
 3) Cancel installation
 ```
 
+The last command in the script file compiles the solver: `cargo build --release`.
+
 ### To Run
 **CLI Interface**
 
 Our CLI interface follows the course project requirement (of course!)
 
 - Default configuration with BCP and VSIDS `./target/release/sat_solver <cnf_file>` 
-- To disable BCP: Add argument `--no-bcp` 
-- To disabled VSIDS : Add argument `--heuristics x`
+- To disable BCP: Add `--no-bcp` 
+- To disabled VSIDS : Add `--heuristics x`
 
 
 **Output format**:
@@ -71,6 +73,8 @@ RESULT: UNSAT
       `Heuristics` trait. 
     - vsids.rs: Implements `VSIDS`, a stronger implementation of the `Heuristics`
       trait that improves solver performance. 
+  - profiler.rs: Counters for the number of free/implied/backtracked/flipped
+    decisions made during the solving of a problem.
 
 ## Data Structures 
 
@@ -78,8 +82,11 @@ RESULT: UNSAT
 Aliased to a 32-bit unsigned integer. 
 
 ### Literal
-- A `Variable` plus a boolean field representing the polarity of a literal. For example, `a`
-and `a'` have an identical `Variable` field but are different Literal objects. 
+- A `Variable`; 
+- A boolean field representing the polarity of a literal. 
+
+For example, `a`
+and `a'` have an identical `Variable` field but different polarities. 
 
 ### LiteralInfo
 - An enum field representing the status of a literal: `Satisfied`, `Unsatisfied`, or
@@ -173,12 +180,12 @@ while performing BCP after each assignment.
 Called every time a variable changes state (being assigned/unassigned, or having
 its assigned polarity flipped), hence this method is used in many places: when
 we pick a variable to assign at-will, during BCP, during backtracking, and
-during the initial force assignment of unit clause variables. 
+during the initial force-assignment of unit clause variables. 
 
-Aside from updating the state saved in `LiteralInfo`, it also inserts all
+Aside from updating the state in `LiteralInfo`, it also inserts all
 `Clause` objects referenced by the `Literal` which becomes unsatisfied into
-`list_of_clauses_to_check` (when BCP is enabled, only insert when the literal is
-one of the two watch variables).  
+`list_of_clauses_to_check` (when BCP is enabled, only insert if this literal is
+one of the two watch variables of a clause).  
 
 #### udpate_clause_state_and_resolve_conflict
 When BCP is not enabled, it pops every `Clause` object reference from
@@ -186,25 +193,27 @@ When BCP is not enabled, it pops every `Clause` object reference from
 unsatisfiable. If no clause is unsatisfiable, then there is no need to backtrack.
 
 In the case of a unsatisfiable clause, the solver drops all remaining `Clause`
-object references from `list_of_clauses_to_check` and starts backtracking. The
-last at-will assignment which has not been flipped is flipped, the clauses that
-contain the unsatisfied literal are added to `list_of_clauses_to_check`, and this method
-is called in a tail-recursive fashion: as long as one clause proves to be
-unsatisfiable, backtrack and flip the last "first-try" assignment. 
+object references from `list_of_clauses_to_check` and starts backtracking. All
+implied assignments and already-flipped assignments are dropped; the
+last at-will assignment which has not been flipped is flipped, clauses which
+contain the subsequently unsatisfied literal are added to `list_of_clauses_to_check`, and this method
+is called in a tail-recursive fashion as long as one clause in the worklist proves to be
+unsatisfiable.
 
-When BCP is enabled, only a portion of code in this method is run: backtracking
-of implied/"second-try" assignments on the stack till the last "first-try"
-assignment and flip. It will not call itself recursively nor will it
-pop and check any clause from `list_of_clauses_to_check`. More on this in the
+When BCP is enabled, only a portion of code in this method is run: it merely drops implied/"already-flipped" assignments on the stack till the last "first-try"
+assignment and flip. The method then returns without recursion. More on this in the
 description for `boolean_constant_propagation`.
 
 #### boolean_constant_propagation
-When BCP is enabled, this method takes over the role from
-`udpate_clause_state_and_resolve_conflict` of checking if each clause becomes
+When BCP is enabled, this method takes over from
+`udpate_clause_state_and_resolve_conflict` the role of checking if each clause becomes
 unsatisfiable. It pops clauses from `list_of_clauses_to_check` and see if they
-has become unsatisfied. If a clause is still unresolved but more than one
-literals are unresolved, the current watch literals are updated; if a clause is
-still unresolved but only one literal (one of the watch literals) remains
-unresolved, force-assign that literal; if the clause is
+has become unsatisfied. If a clause is still unresolved and more than one of its
+literals are unresolved, the current watch literals are updated; if a clause
+only has one unresolved literal remaining (it has to be one of the watch literals), force-assign that variable; if the clause is
 unsatisfiable, then transfer control to
+`udpate_clause_state_and_resolve_conflict` to perform backtracking.
+
+This method also keeps a record of all implied assignments in each call. If it
+detects a variable being implied to be both on and off, it transfers control to
 `udpate_clause_state_and_resolve_conflict` to perform backtracking.
