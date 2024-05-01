@@ -34,8 +34,14 @@ pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
     // CLAUSE LOOP
     let mut clause_id: u32 = 0;
     for line in buffer.split("\n").map(|s| s.trim()) {
+        if line.is_empty(){
+            continue;
+        }
+        if line.starts_with("0") { 
+            continue; 
+        }
         if line.starts_with("%") {
-            break;
+            continue;
         }
         if line.starts_with("c") || line.starts_with("p") {
             continue;

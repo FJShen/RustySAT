@@ -61,6 +61,7 @@ fn verify(p : &Problem, s: &SolutionStack) -> bool {
         }
     }
 
+    info!(target: "verify", "leftover clauses not satisfied: {:#?}", clauses_unsatisfied);
     clauses_unsatisfied.is_empty()
 }
 
