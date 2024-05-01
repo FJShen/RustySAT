@@ -49,7 +49,7 @@ impl Heuristics for DLIS {
         trace!(target: "DLIS", "DLIS: add clause {lits:?}");
     }
 
-    fn add_conflict_clause(&mut self, c: &Clause) {
+    fn add_conflict_clause(&mut self, _c: &Clause) {
         
     }
 

@@ -14,14 +14,17 @@ use crate::profiler::SolverProfiler;
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(long)]
+    #[arg(index=1)]
     input: String,
 
-    #[arg(long)]
+    #[arg(long, default_value_t = String::from("vsids"))]
     heuristics: String,
 
     #[arg(long)]
     no_bcp: bool,
+
+    #[arg(long)]
+    check: bool,
 
     #[arg(long)]
     satisfiable: bool,
@@ -30,7 +33,7 @@ struct Args {
 fn test(input : &String, mut h: impl Heuristics, use_bcp: bool) -> (Problem, Option<SolutionStack>) {
     let mut prof = SolverProfiler::new();
     h.set_use_bcp(use_bcp);
-    let mut problem = parser::parse(&input, &mut h);
+    let mut problem = parser::parse(input, &mut h);
     trace!(target: "solver", "problem is: {:#?}", problem);
     prof.reset_start_time();
     let solution = sat_solver::dpll::dpll(&mut problem, &mut h, &mut prof);
@@ -63,13 +66,10 @@ fn verify(p : &Problem, s: &SolutionStack) -> bool {
 
 fn main() {
     env_logger::init();
-
     let args = Args::parse();
     info!(target: "solver", "{:?}", args);
-
     let use_bcp = !args.no_bcp;
 
-    // ps.push(sat_solver::get_sample_problem());
     let (p, s) = match args.heuristics.as_str() {
         "ascending" => test(&args.input, Ascending::new(), use_bcp),
         "dlis"      => test(&args.input, DLIS::new(), use_bcp),
@@ -77,19 +77,24 @@ fn main() {
         _           => panic!("Unrecognised heuristics specified"),
     };
 
-    info!("input file is {}", &args.input);
+    if args.check {
+        assert!(args.satisfiable == s.is_some());
+    }
     if let Some(sol) = &s  {
         info!("solution is {:?}", sol);
-        if verify(&p, &sol) {
-            info!("solution is correct");
+        assert!(verify(&p, &sol));
+        println!("RESULT: SAT");
+        print!("ASSIGNMENT:");
+        let mut sorted = BTreeSet::new();
+        for s in sol.stack.iter() {
+            sorted.insert((s.assignment.variable.index, s.assignment.polarity));
         }
-        else {
-            panic!("solution is incorrect");
+        for (var, pol) in sorted {
+            print!(" {}={}", var, if pol == Polarity::Off {0} else {1});
         }
+        println!();
     }
     else {
-        info!("SAT is unsatisfiable");
+        println!("RESULT: UNSAT");
     }
-
-    assert!(args.satisfiable == s.is_some());
 }

@@ -1,7 +1,6 @@
 #!/bin/sh
 
 BIN=target/debug/sat_solver
-export RUST_LOG=info
 
 cargo build
 
@@ -9,12 +8,12 @@ for HEUR in "ascending" "dlis" "vsids"
     do
     for FILE in input/unsatisfiable/*
     do
-        $BIN --input $FILE --heuristics $HEUR || return 1
+        $BIN $FILE --heuristics $HEUR --check || return 1
     done
 
     for FILE in input/satisfiable/*
     do
-        $BIN --input $FILE --heuristics $HEUR --satisfiable || return 1
+        $BIN $FILE --heuristics $HEUR --check --satisfiable || return 1
     done
 done
 

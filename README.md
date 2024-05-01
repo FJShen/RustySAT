@@ -3,8 +3,8 @@ Welcome to RustySAT, a SAT Solver written in Rust! This work is done by Andrew
 Gan and Fangjia Shen. 
 
 ## Features
-- Boolean Constant Propagation (Fangjia)
-- VSIDS (Andrew)
+- Boolean Constraint Propagation (Fangjia)
+- Variable Heuristics (Andrew)
 
 ## How to Compile and Run
 
@@ -41,7 +41,7 @@ Our CLI interface follows the course project requirement (of course!)
 - Default configuration with BCP and VSIDS `./target/release/sat_solver <cnf_file>` 
 - To disable BCP: Add `--no-bcp` 
 - To disabled VSIDS : Add `--heuristics x`
-
+- To confirm SAT/UNSAT : Add `--check [--satisfiable]`
 
 **Output format**:
 - SAT

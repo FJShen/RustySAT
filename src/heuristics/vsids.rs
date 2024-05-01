@@ -105,11 +105,11 @@ impl Heuristics for VSIDS {
         trace!(target: "vsids", "VSIDS: assign variable {var:?}");
     }
 
-    fn satisfy_clause(&mut self, c: &Clause) {
+    fn satisfy_clause(&mut self, _c: &Clause) {
         
     }
 
-    fn unsatisfy_clause(&mut self, c: &Clause) {
+    fn unsatisfy_clause(&mut self, _c: &Clause) {
         
     }
 

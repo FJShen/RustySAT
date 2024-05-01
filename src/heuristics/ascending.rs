@@ -41,7 +41,7 @@ impl Heuristics for Ascending {
         trace!(target: "heuristics", "Ascending: add clause {c:?}");
     }
 
-    fn add_conflict_clause(&mut self, c: &Clause) {
+    fn add_conflict_clause(&mut self, _c: &Clause) {
         
     }
 
@@ -71,11 +71,11 @@ impl Heuristics for Ascending {
         trace!(target: "heuristics", "Ascending: assign variable {var:?}");
     }
 
-    fn satisfy_clause(&mut self, c: &Clause) {
+    fn satisfy_clause(&mut self, _c: &Clause) {
         
     }
 
-    fn unsatisfy_clause(&mut self, c: &Clause) {
+    fn unsatisfy_clause(&mut self, _c: &Clause) {
         
     }
 
