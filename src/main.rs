@@ -2,55 +2,45 @@ mod heuristics;
 mod parser;
 mod profiler;
 mod sat_solver;
-use std::{borrow::BorrowMut, collections::BTreeSet};
+use core::panic;
+use std::collections::BTreeSet;
 
 use clap::Parser;
-use log::{info, trace};
-use crate::heuristics::{ascending::Ascending, heuristics::Heuristics, vsids::VSIDS};
-use crate::profiler::SolverProfiler;
+use log::{trace,info};
 use sat_solver::*;
+use crate::heuristics::{ascending::Ascending, heuristics::Heuristics, dlis::DLIS, vsids::VSIDS};
+use crate::profiler::SolverProfiler;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
+    #[arg(long)]
     input: String,
 
-    #[arg(default_value_t = String::from("vsids"), long)]
+    #[arg(long)]
     heuristics: String,
 
     #[arg(long)]
     no_bcp: bool,
+
+    #[arg(long)]
+    satisfiable: bool,
 }
 
-fn test_ascending(input: String, use_bcp: bool) -> (Problem, Option<SolutionStack>) {
-    let mut h = Ascending::new();
+fn test(input : &String, mut h: impl Heuristics, use_bcp: bool) -> (Problem, Option<SolutionStack>) {
     let mut prof = SolverProfiler::new();
     h.set_use_bcp(use_bcp);
-    let mut p = parser::parse(&input, &mut h);
-    trace!(target: "solver", "problem is: {:#?}", p);
+    let mut problem = parser::parse(&input, &mut h);
+    trace!(target: "solver", "problem is: {:#?}", problem);
     prof.reset_start_time();
-    let solution = sat_solver::dpll::dpll(&mut p, h, &mut prof);
+    let solution = sat_solver::dpll::dpll(&mut problem, &mut h, &mut prof);
     prof.calc_duration_till_now();
     info!(target: "solver", "solution is {:?}", solution);
     info!(target: "profiler", "Profiling results: {}", prof);
-    (p, solution)
+    (problem, solution)
 }
 
-fn test_vsids(input: String, use_bcp: bool) -> (Problem, Option<SolutionStack>) {
-    let mut h = VSIDS::new();
-    let mut prof = SolverProfiler::new();
-    h.set_use_bcp(use_bcp);
-    let mut p = parser::parse(&input, &mut h);
-    trace!(target: "solver", "problem is: {:#?}", p);
-    prof.reset_start_time();
-    let solution = sat_solver::dpll::dpll(&mut p, h, &mut prof);
-    prof.calc_duration_till_now();
-    info!(target: "solver", "solution is {:?}", solution);
-    info!(target: "profiler", "Profiling results: {}", prof);
-    (p, solution)
-}
-
-fn verify_solution(p : &Problem, s: &SolutionStack) -> bool {
+fn verify(p : &Problem, s: &SolutionStack) -> bool {
     let mut clauses_unsatisfied = BTreeSet::<u32>::new();
     for c in p.list_of_clauses.iter() {
         clauses_unsatisfied.insert((**c).borrow().id);
@@ -60,9 +50,11 @@ fn verify_solution(p : &Problem, s: &SolutionStack) -> bool {
             variable: step.assignment.variable,
             polarity: step.assignment.polarity,
         };
-        let clauses_appeared = &(**p.list_of_literal_infos.get(&literal).unwrap()).borrow_mut().list_of_clauses;
-        for clause in clauses_appeared.iter() {
-            clauses_unsatisfied.remove(&(**clause).borrow().id);
+        if let Some(clauses_appeared) = p.list_of_literal_infos.get(&literal) {
+            let cs = &(**clauses_appeared).borrow_mut().list_of_clauses;
+            for clause in cs.iter() {
+                clauses_unsatisfied.remove(&(**clause).borrow().id);
+            }
         }
     }
 
@@ -79,17 +71,25 @@ fn main() {
 
     // ps.push(sat_solver::get_sample_problem());
     let (p, s) = match args.heuristics.as_str() {
-        "vsids" => test_vsids(args.input, use_bcp),
-        _ => test_ascending(args.input, use_bcp),
+        "ascending" => test(&args.input, Ascending::new(), use_bcp),
+        "dlis"      => test(&args.input, DLIS::new(), use_bcp),
+        "vsids"     => test(&args.input, VSIDS::new(), use_bcp),
+        _           => panic!("Unrecognised heuristics specified"),
     };
 
-    if let Some(s) = &s  {
-        if verify_solution(&p, &s) {
-            info!(target: "verifier", "solution is correct");
+    println!("input file is {}", &args.input);
+    if let Some(sol) = &s  {
+        println!("solution is {:?}", sol);
+        if verify(&p, &sol) {
+            println!("solution is correct");
         }
         else {
-            info!(target: "verifier", "solution is incorrect");
+            println!("solution is incorrect");
         }
     }
-    info!(target: "solver", "solution is {:?}", s);
+    else {
+        println!("SAT is unsatisfiable");
+    }
+
+    assert!(args.satisfiable == s.is_some());
 }

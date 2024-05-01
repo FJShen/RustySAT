@@ -106,7 +106,7 @@ pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
             clause.watch_literals[clause_lit_count % 2] = literal;
         }
         let current_clause = circuit.list_of_clauses.last().unwrap();
-        heuristics.add_clause(&current_clause.borrow());
+        heuristics.add_parsed_clause(&current_clause.borrow());
     }
 
     circuit.list_of_clauses.iter().for_each(|rc| {

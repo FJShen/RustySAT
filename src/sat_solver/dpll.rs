@@ -8,7 +8,7 @@ use tailcall::tailcall;
 // If the problem is UNSAT, we will return None
 pub fn dpll(
     mut p: &mut Problem,
-    mut h: impl Heuristics,
+    h: &mut impl Heuristics,
     prof: &mut SolverProfiler,
 ) -> Option<SolutionStack> {
     let mut solution = SolutionStack { stack: vec![] };
@@ -29,7 +29,7 @@ pub fn dpll(
     // 4. Repeat
     // Resolve all variables before we return a solution
 
-    let ret = force_assignment_for_unit_clauses(&mut p, &mut solution, &mut h, prof);
+    let ret = force_assignment_for_unit_clauses(&mut p, &mut solution, h, prof);
     if !ret {
         return None;
     }
@@ -44,16 +44,17 @@ pub fn dpll(
         trace!(target: "dpll", "Assigning variable {:?}", var);
         trace!(target: "dpll", "solution stack: {:?}", solution);
 
+        h.assign_variable(var);
         mark_variable_assigned(&mut p, var);
-        update_literal_info(&mut p, var, pol, UpdateLiteralInfoCause::FreeAssignment, &h);
+        update_literal_info(&mut p, var, pol, UpdateLiteralInfoCause::FreeAssignment, h);
         prof.bump_free_decisions();
 
         // sanity check
         // panic_if_incoherent(&p, &solution);
         if h.use_bcp() {
-            while !boolean_constant_propagation(&mut p, &mut solution, &mut h, prof) {
+            while !boolean_constant_propagation(&mut p, &mut solution, h, prof) {
                 let resolved_all_conflicts =
-                    update_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
+                    update_clause_state_and_resolve_conflict(&mut p, &mut solution, h, prof);
                 if !resolved_all_conflicts {
                     return None;
                 }
@@ -61,7 +62,7 @@ pub fn dpll(
             trace!(target: "bcp", "No more implications");
         } else {
             let resolved_all_conflicts =
-                update_clause_state_and_resolve_conflict(&mut p, &mut solution, &mut h, prof);
+                update_clause_state_and_resolve_conflict(&mut p, &mut solution, h, prof);
             if !resolved_all_conflicts {
                 return None;
             }
@@ -145,7 +146,6 @@ pub fn force_assignment_for_unit_clauses(
         trace!(target: "unit_clause", "solution stack: {:?}", solution);
 
         heuristics.assign_variable(ass_v);
-
         mark_variable_assigned(problem, ass_v);
         update_literal_info(
             problem,
@@ -205,7 +205,7 @@ pub fn update_literal_info(
     v: Variable,
     p: Polarity,
     cause: UpdateLiteralInfoCause,
-    heuristics: &impl Heuristics,
+    heuristics: &mut impl Heuristics,
 ) {
     // for both literals (on and off),
     // - update their state from Unknown to Sat/Unsat
@@ -273,6 +273,7 @@ pub fn update_literal_info(
             } else {
                 problem.list_of_clauses_to_check.insert(Rc::clone(rc));
             }
+            heuristics.unsatisfy_clause(&rc.borrow());
         });
     }
 }
@@ -339,7 +340,6 @@ pub fn boolean_constant_propagation(
             trace!(target: "bcp", "solution stack: {:?}", solution);
 
             heuristics.assign_variable(v);
-
             mark_variable_assigned(problem, v);
             update_literal_info(
                 problem,
@@ -383,12 +383,16 @@ pub fn update_clause_state_and_resolve_conflict(
             };
             trace!(target: "backtrack", "Clause {} becomes {}", c.id, s);
 
+            if new_status == ClauseState::Satisfied {
+                heuristics.satisfy_clause(&c);
+            }
+
             if new_status == ClauseState::Unsatisfiable {
                 // One unsat clause is enough, we have to keep backtracking
                 found_unsat = true;
 
                 // register conflict clause with heuristics
-                heuristics.add_clause(&c);
+                heuristics.add_conflict_clause(&c);
                 break;
             }
         }

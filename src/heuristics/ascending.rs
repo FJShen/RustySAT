@@ -34,21 +34,22 @@ impl Heuristics for Ascending {
         }
     }
 
-    fn add_clause(&mut self, c: &Clause) {
+    fn add_parsed_clause(&mut self, c: &Clause) {
         for l in c.list_of_literals.iter() {
-            if !self.variable_assigned.contains(&l.variable) {
-                self.variable_unassigned.insert(l.variable);
-            }
+            self.variable_unassigned.insert(l.variable);
         }
         trace!(target: "heuristics", "Ascending: add clause {c:?}");
     }
 
+    fn add_conflict_clause(&mut self, c: &Clause) {
+        
+    }
+
     fn decide(&mut self) -> Option<Literal> {
-        let last = self.variable_unassigned.pop_last();
+        let last = self.variable_unassigned.last();
         if let Some(variable) = last {
-            self.variable_assigned.insert(variable);
             let l = Literal {
-                variable: variable,
+                variable: *variable,
                 polarity: Polarity::On,
             };
             trace!(target: "heuristics", "Ascending: decide {:?}", l);
@@ -65,9 +66,17 @@ impl Heuristics for Ascending {
     }
 
     fn assign_variable(&mut self, var: Variable) {
-        self.variable_unassigned.remove(&var);
-        self.variable_assigned.insert(var);
+        assert!(self.variable_unassigned.remove(&var));
+        assert!(self.variable_assigned.insert(var));
         trace!(target: "heuristics", "Ascending: assign variable {var:?}");
+    }
+
+    fn satisfy_clause(&mut self, c: &Clause) {
+        
+    }
+
+    fn unsatisfy_clause(&mut self, c: &Clause) {
+        
     }
 
     fn set_use_bcp(&mut self, _use_bcp: bool) {
