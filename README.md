@@ -70,9 +70,11 @@ RESULT: UNSAT
   - heuristics/
     - heuristics.rs: Declaration of the `Heuristics` trait (heuristics for picking a variable to assign). 
     - ascending.rs: Implements `Ascending`, a baseline implementation of the
-      `Heuristics` trait. 
-    - vsids.rs: Implements `VSIDS`, a stronger implementation of the `Heuristics`
-      trait that improves solver performance. 
+      `Heuristics` trait that recommends unassigned variables starting with the smallest index.
+    - dlis.rs: Implements `Dynamic Largest Individual Sum`, heuristics which recommends the literal  
+      that appears most frequently among unresolved clauses.
+    - vsids.rs: Implements `Variable State Independent Decaying Sum`, heuristics which prioritises 
+      literals that appeared in recently discovered conflict clauses.
   - profiler.rs: Counters for the number of free/implied/backtracked/flipped
     decisions made during the solving of a problem.
 

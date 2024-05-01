@@ -77,18 +77,18 @@ fn main() {
         _           => panic!("Unrecognised heuristics specified"),
     };
 
-    println!("input file is {}", &args.input);
+    info!("input file is {}", &args.input);
     if let Some(sol) = &s  {
-        println!("solution is {:?}", sol);
+        info!("solution is {:?}", sol);
         if verify(&p, &sol) {
-            println!("solution is correct");
+            info!("solution is correct");
         }
         else {
-            println!("solution is incorrect");
+            panic!("solution is incorrect");
         }
     }
     else {
-        println!("SAT is unsatisfiable");
+        info!("SAT is unsatisfiable");
     }
 
     assert!(args.satisfiable == s.is_some());
