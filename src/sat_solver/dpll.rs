@@ -52,7 +52,7 @@ pub fn dpll(
         // sanity check
         // panic_if_incoherent(&p, &solution);
         if h.use_bcp() {
-            while !boolean_constant_propagation(&mut p, &mut solution, h, prof) {
+            while !boolean_constraint_propagation(&mut p, &mut solution, h, prof) {
                 let resolved_all_conflicts =
                     update_clause_state_and_resolve_conflict(&mut p, &mut solution, h, prof);
                 if !resolved_all_conflicts {
@@ -157,7 +157,7 @@ pub fn force_assignment_for_unit_clauses(
         prof.bump_implied_decisions();
 
         if heuristics.use_bcp() {
-            while !boolean_constant_propagation(problem, solution, heuristics, prof) {
+            while !boolean_constraint_propagation(problem, solution, heuristics, prof) {
                 let resolved_all_conflicts =
                     update_clause_state_and_resolve_conflict(problem, solution, heuristics, prof);
                 if !resolved_all_conflicts {
@@ -281,7 +281,7 @@ pub fn update_literal_info(
 /// Called after assigning a variable, or performing a backtrack.
 /// Returns true if no more implications can be made; returns false if a
 /// variable is implied to be both On and Off.
-pub fn boolean_constant_propagation(
+pub fn boolean_constraint_propagation(
     problem: &mut Problem,
     solution: &mut SolutionStack,
     heuristics: &mut impl Heuristics,

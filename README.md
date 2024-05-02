@@ -65,7 +65,8 @@ RESULT: UNSAT
   - sat_solver/
     - sat_structures.rs: Auxiliary methods for the 
       data structures (e.g. debug-print format and checking if a clause is unsatisfiable). 
-    - dpll.rs: Routines for the DPLL algorithm. Routines for BCP. 
+    - dpll.rs: Routines for the DPLL algorithm. Routines for `Boolean Constraint
+      Propagation`. 
   - heuristics.rs: Top level file for the module `heuristics`. 
   - heuristics/
     - heuristics.rs: Declaration of the `Heuristics` trait (heuristics for picking a variable to assign). 
@@ -76,7 +77,7 @@ RESULT: UNSAT
     - vsids.rs: Implements `Variable State Independent Decaying Sum`, heuristics which prioritises 
       literals that appeared in recently discovered conflict clauses.
   - profiler.rs: Counters for the number of free/implied/backtracked/flipped
-    decisions made during the solving of a problem.
+    decisions made during the solving of a problem. Timer for run time.
 
 ## Data Structures 
 
@@ -142,7 +143,7 @@ to a heap-allocated `LiteralInfo` object
 - An enum representing the nature of this assignment:
   - Forced-at-Init: Implied in the beginning because this variable belongs to
     a unit clause.
-  - Forced-at-BCP: Implied during Boolean Constant Propagation.
+  - Forced-at-BCP: Implied during Boolean Constraint Propagation.
   - First-try: The variable was picked at-will by some heuristics; haven't
     backtracked and flipped the polarity of this assignment.
   - Second-try: Converted from `First-try` after flipping the polarity during
@@ -204,9 +205,9 @@ unsatisfiable.
 
 When BCP is enabled, only a portion of code in this method is run: it merely drops implied/"already-flipped" assignments on the stack till the last "first-try"
 assignment and flip. The method then returns without recursion. More on this in the
-description for `boolean_constant_propagation`.
+description for `boolean_constraint_propagation`.
 
-#### boolean_constant_propagation
+#### boolean_constraint_propagation
 When BCP is enabled, this method takes over from
 `udpate_clause_state_and_resolve_conflict` the role of checking if each clause becomes
 unsatisfiable. It pops clauses from `list_of_clauses_to_check` and see if they
