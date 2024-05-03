@@ -8,6 +8,7 @@ pub struct SolverProfiler {
     implied_decisions: u64,
     backtracked_decisions: u64,
     flipped_decisions: u64,
+    conflict_clauses: u64,
 
     // timers
     duration: Duration,
@@ -21,6 +22,7 @@ impl SolverProfiler {
             implied_decisions: 0,
             backtracked_decisions: 0,
             flipped_decisions: 0,
+            conflict_clauses: 0,
             start_time: Instant::now(),
             duration: Duration::new(0, 0),
         }
@@ -43,11 +45,14 @@ impl SolverProfiler {
     pub fn bump_flipped_decisions(&mut self) {
         self.flipped_decisions += 1;
     }
+    pub fn bump_conflict_clauses(&mut self) {
+        self.conflict_clauses += 1;
+    }
 }
 
 impl fmt::Display for SolverProfiler {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "free_decisions: {}, implied_decisions: {}, backtracked_decisions: {}, flipped_decisions: {}, duration: {}us", 
-        self.free_decisions, self.implied_decisions, self.backtracked_decisions, self.flipped_decisions, self.duration.as_micros())
+        write!(f, "free_decisions: {}, implied_decisions: {}, backtracked_decisions: {}, flipped_decisions: {}, duration: {}us, conflict_clauses: {}", 
+        self.free_decisions, self.implied_decisions, self.backtracked_decisions, self.flipped_decisions, self.duration.as_micros(), self.conflict_clauses)
     }
 }

@@ -1,8 +1,8 @@
 use crate::{heuristics::heuristics::Heuristics, profiler::SolverProfiler};
 
 use super::*;
-use log::{info, trace};
-use std::{borrow::Borrow, cell::Ref, collections::BTreeMap};
+use log::{info, trace, warn};
+use std::{cell::Ref, collections::BTreeMap};
 use tailcall::tailcall;
 
 // If the problem is UNSAT, we will return None
@@ -195,6 +195,7 @@ pub enum UpdateLiteralInfoCause {
     Backtrack,
     BCPImplication,
     UnitClauseImplication,
+    MutateStackForCDCL
 }
 
 /// Updates LiteralInfo for the affected literals; if this assignment has the
@@ -233,6 +234,7 @@ pub fn update_literal_info(
                     "literal must not be Unknown/Sat"
                 );
             }
+            UpdateLiteralInfoCause::MutateStackForCDCL => {}
         }
         *status_ref = LiteralState::Sat;
     }
@@ -260,6 +262,7 @@ pub fn update_literal_info(
                     "literal must not be Unknown/Unsat"
                 );
             }
+            UpdateLiteralInfoCause::MutateStackForCDCL => {}
         }
         *status_ref = LiteralState::Unsat;
 
@@ -337,7 +340,9 @@ pub fn boolean_constraint_propagation(
                             let flipped_literals: BTreeSet<Literal> =
                                 conflict_literals.iter().map(|l| !*l).collect();
                             let c_rc = add_new_clause_from_literals(flipped_literals, problem, solution);
-                            backtrack_one_variables_in_clause(&(*c_rc).borrow(), problem, solution, heuristics, prof);
+                            prof.bump_conflict_clauses();
+                            heuristics.add_conflict_clause(&(*c_rc).borrow());
+                            mutate_stack_for_cdcl(&(*c_rc).borrow(), problem, solution, heuristics, prof);
                         }
 
                         return false;
@@ -572,6 +577,7 @@ pub fn infer_new_conflict_clause(
         .iter()
         .map(|l| f_find_assignment_step(l))
         .flat_map(|step| match step.assignment_type {
+            SolutionStepType::Zombied => {panic!("Should not encounter Zombied step");}
             SolutionStepType::ForcedAtInit
             | SolutionStepType::FreeChoiceFirstTry
             | SolutionStepType::FreeChoiceSecondTry => {
@@ -624,28 +630,31 @@ pub fn add_new_clause_from_literals(
     let mut clause_ref = clause_rc.borrow_mut();
 
     let list_of_lits = Vec::from_iter(lits.iter().copied());
-    let list_of_lit_infos: Vec<Rc<RefCell<LiteralInfo>>> = list_of_lits
+    let list_of_lit_infos: Vec<Weak<RefCell<LiteralInfo>>> = list_of_lits
         .iter()
-        .map(|l| Rc::clone(p.list_of_literal_infos.get(&l).unwrap()))
+        .map(|l| Rc::downgrade(p.list_of_literal_infos.get(&l).unwrap()))
         .collect();
 
     // Assign watch literals. At this point all literals should be UNSAT.
     // We pick the latest assigned variable to be one of the watch literals, it
     // will be flipped and become SAT when we backtrack.
-    let latest_literal = s
+    let mut latest_literals = s
         .stack
         .iter()
+        .rev()
         .map(|step| Literal {
             variable: step.assignment.variable,
             polarity: step.assignment.polarity,
         })
-        .rfind(|l| lits.contains(&!(*l)))
-        .unwrap();
-    clause_ref.watch_literals[0] = !latest_literal;
-    clause_ref.watch_literals[1] = *list_of_lits
-        .iter()
-        .find(|l| **l != !latest_literal)
-        .unwrap_or(&NULL_LITERAL);
+        .filter(|l| lits.contains(&!(*l)))
+        .take(2);
+    clause_ref.watch_literals[0] = !(latest_literals.next().unwrap());
+    if lits.len() > 1{
+        clause_ref.watch_literals[1] = !(latest_literals.next().unwrap());
+    } else {
+        clause_ref.watch_literals[1] = NULL_LITERAL;
+    }
+    assert!(latest_literals.next() == None);
 
     clause_ref.list_of_literals = list_of_lits;
     clause_ref.list_of_literal_infos = list_of_lit_infos;
@@ -659,7 +668,8 @@ pub fn add_new_clause_from_literals(
         .list_of_literal_infos
         .iter()
         .for_each(|li_ref| {
-            let mut li = li_ref.borrow_mut();
+            let li_rc = li_ref.upgrade().unwrap();
+            let mut li = li_rc.borrow_mut();
             li.list_of_clauses.push(Rc::clone(&clause_rc));
             //info!(target: "cdcl", "Adding clause id {} to li {:?}", clause_rc.borrow().id, li);
         });
@@ -667,12 +677,20 @@ pub fn add_new_clause_from_literals(
     // append clause to the list_of_clauses
     info!(target: "cdcl", "New clause added {}: {:?}", (*clause_rc).borrow().id, (*clause_rc).borrow());
     p.list_of_clauses.push(Rc::clone(&clause_rc));
+
+    // drop some clauses if we had too many
+    if p.list_of_conflict_clauses.len() > 2 * p.list_of_clauses.len() {
+        warn!(target: "cdcl", "Dropping conflict clauses");
+        p.list_of_conflict_clauses.clear();
+    }
+
+    p.list_of_conflict_clauses.push(Rc::clone(&clause_rc));
     drop(clause);
     clause_rc
 }
 
 // a crude form of non chronological backtracking
-fn backtrack_one_variables_in_clause(
+fn mutate_stack_for_cdcl(
     c: &Clause,
     p: &mut Problem,
     s: &mut SolutionStack,
@@ -681,51 +699,28 @@ fn backtrack_one_variables_in_clause(
 ) {
     let var_set = BTreeSet::from_iter(c.list_of_literals.iter().map(|l| l.variable));
 
-    let mut index_to_wipe = vec![];
+    let mut seen_watch_vars = 0;
 
-    // all implied assignments, plus var_set variables can be backtracked
-
-    for (idx, step) in s.stack.iter().enumerate().rev() {
+    for step in s.stack.iter_mut().rev(){
         let var = step.assignment.variable;
-        index_to_wipe.push(idx);
-        if var_set.contains(&var) {
+        if var==c.watch_literals[0].variable || var == c.watch_literals[1].variable {
+            seen_watch_vars += 1;
+        }
+
+        if seen_watch_vars == 2{
+            // restore this step to its first try, so it will be noticed by the
+            // backtrack step
+            if step.assignment_type == SolutionStepType::FreeChoiceSecondTry{
+                step.assignment.polarity = !step.assignment.polarity;
+                step.assignment_type = SolutionStepType::FreeChoiceFirstTry;
+                update_literal_info(p, var, step.assignment.polarity, UpdateLiteralInfoCause::MutateStackForCDCL, heuristics);
+            }
             break;
+        } else {
+            step.assignment_type = SolutionStepType::Zombied;
         }
-    };
-
-    index_to_wipe.iter().for_each(|idx| {
-        let step = s.stack.remove(*idx);
-        let var = step.assignment.variable;
-        info!(target: "cdcl", "Dropping variable {:?}", var);
-
-        heuristics.unassign_variable(var);
-
-        // Update the list_of_variables
-        // May panic in the unlikely event var does not exist in
-        // list_of_variables
-        mark_variable_unassigned(p, var);
-        prof.bump_backtracked_decisions();
-
-        // update the list_of_literal_infos
-        if let Some(li) = p.list_of_literal_infos.get(&Literal {
-            variable: var,
-            polarity: Polarity::On,
-        }) {
-            let status_ref = &mut li.borrow_mut().status;
-            assert!(*status_ref != LiteralState::Unknown);
-            *status_ref = LiteralState::Unknown;
-        }
-
-        if let Some(li) = p.list_of_literal_infos.get(&Literal {
-            variable: var,
-            polarity: Polarity::Off,
-        }) {
-            let status_ref = &mut li.borrow_mut().status;
-            assert!(*status_ref != LiteralState::Unknown);
-            *status_ref = LiteralState::Unknown;
-        }
-    });
-
+    }
+    info!(target: "cdcl", "Stack is now {:?}", s);
 }
 
 ///

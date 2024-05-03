@@ -29,6 +29,7 @@ pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
         list_of_literal_infos: HashMap::<Literal, Rc<RefCell<LiteralInfo>>>::new(),
         list_of_clauses: Vec::<Rc<RefCell<Clause>>>::new(),
         list_of_clauses_to_check: BTreeSet::new(),
+        list_of_conflict_clauses: vec![]
     };
 
     // CLAUSE LOOP
@@ -120,7 +121,7 @@ pub fn parse(filename: &String, heuristics: &mut impl Heuristics) -> Problem {
         clause_ref.list_of_literal_infos = clause_ref
             .list_of_literals
             .iter()
-            .map(|l| Rc::clone(&circuit.list_of_literal_infos[l]))
+            .map(|l| Rc::downgrade(&circuit.list_of_literal_infos[l]))
             .collect()
     });
 

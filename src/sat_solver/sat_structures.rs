@@ -48,6 +48,24 @@ impl fmt::Debug for Literal {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct _Clause<'a> {
+    pub _id: &'a u32,
+    // pub status: ClauseState,
+    pub _list_of_literals: &'a Vec<Literal>,
+    pub _watch_literals: &'a [Literal; 2],
+}
+
+impl<'a> _Clause<'a>{
+    pub fn from(c: &'a Clause)->Self{
+        _Clause{
+            _id: &c.id,
+            _list_of_literals: &c.list_of_literals,
+            _watch_literals: &c.watch_literals,
+        }
+    }
+}
+
 impl fmt::Debug for Clause {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // The point of this struct is to remove the strong reference to
@@ -55,20 +73,33 @@ impl fmt::Debug for Clause {
         // and printed. Printing a Clause object that holds Rc pointers to
         // LiteralInfos will cause the LiteralInfo to be printed, which in turn
         // cause more Clauses to be printed...
-        #[derive(Debug)]
-        struct _Clause<'a> {
-            pub _id: &'a u32,
-            // pub status: ClauseState,
-            pub _list_of_literals: &'a Vec<Literal>,
-            pub _watch_literals: &'a [Literal; 2],
-        }
 
-        let c = _Clause {
-            _id: &self.id,
-            _list_of_literals: &self.list_of_literals,
-            _watch_literals: &self.watch_literals,
-        };
+        let c = _Clause::from(self);
         write!(f, "{:?}", c)
+    }
+}
+
+impl PartialEq for Clause {
+    fn eq(&self, other: &Clause) -> bool{
+        let lhs = _Clause::from(self);
+        let rhs = _Clause::from(other);
+        return lhs == rhs;
+    }
+}
+
+impl Eq for Clause{}
+
+impl PartialOrd for Clause{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Clause{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering{
+        let lhs = _Clause::from(self);
+        let rhs = _Clause::from(other);
+        return _Clause::cmp(&lhs, &rhs);
     }
 }
 
@@ -79,7 +110,7 @@ impl Clause {
         //for l in &self.list_of_literals {
         for li in &self.list_of_literal_infos {
             //let ls = problem.list_of_literal_infos[l].borrow().status;
-            let ls = li.borrow().status;
+            let ls = li.upgrade().unwrap().borrow().status;
             if ls == LiteralState::Sat {
                 return ClauseState::Satisfied;
             } else if ls == LiteralState::Unknown {
@@ -118,7 +149,7 @@ impl Clause {
             .zip(self.list_of_literal_infos.iter())
             .for_each(|(l, li)| {
                 // let l_status = problem.list_of_literal_infos[l].borrow().status;
-                let l_status = li.borrow().status;
+                let l_status = li.upgrade().unwrap().borrow().status;
                 if l_status == LiteralState::Sat {
                     already_sat = true;
                 }
@@ -155,7 +186,7 @@ impl Clause {
             .iter()
             .zip(self.list_of_literal_infos.iter())
             .filter(|(l, _)| !self.hits_watch_literals(**l))
-            .find(|(_, li)| li.borrow().status == LiteralState::Unknown);
+            .find(|(_, li)| li.upgrade().unwrap().borrow().status == LiteralState::Unknown);
 
         match substitute_literal {
             Some((l, _)) => {
@@ -185,6 +216,7 @@ impl fmt::Debug for SolutionStep {
                 SolutionStepType::FreeChoiceSecondTry => "T",
                 SolutionStepType::ForcedAtBCP{unit_clause_id:_} => "x",
                 SolutionStepType::ForcedAtInit => "I",
+                SolutionStepType::Zombied => "Z"
             }
         )?;
         write!(f, "{}", self.assignment.variable.index)?;

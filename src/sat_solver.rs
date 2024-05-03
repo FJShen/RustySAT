@@ -2,7 +2,7 @@ use core::fmt;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::collections::BTreeSet;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 // impl of DPLL algorithm
 pub mod dpll;
@@ -50,12 +50,12 @@ pub enum Polarity {
     On,
 }
 
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
+#[derive()]
 pub struct Clause {
     pub id: u32,
     // pub status: ClauseState,
     pub list_of_literals: Vec<Literal>,
-    pub list_of_literal_infos: Vec<Rc<RefCell<LiteralInfo>>>,
+    pub list_of_literal_infos: Vec<Weak<RefCell<LiteralInfo>>>,
     pub watch_literals: [Literal; 2],
 }
 
@@ -99,6 +99,8 @@ pub struct Problem {
     // is certainly not Unsatisfiable.
     // Corollary: This list must be empty when the solver declares SAT.
     pub list_of_clauses_to_check: BTreeSet<Rc<RefCell<Clause>>>,
+
+    pub list_of_conflict_clauses: Vec<Rc<RefCell<Clause>>>
 }
 
 ////////////////////////////////////////////////////////
@@ -128,6 +130,10 @@ pub enum SolutionStepType {
     ForcedAtBCP{unit_clause_id: u32},
     // forced due to it belonging to a unit clause
     ForcedAtInit,
+    // they are created from Steps when a new conflict clause is added. Any
+    // assignment between the two most recently assigned variables of the
+    // conflict clause is zombied. 
+    Zombied,
 }
 
 #[derive(Debug)]
