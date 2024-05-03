@@ -617,7 +617,7 @@ pub fn add_new_clause_from_literals(
     p: &mut Problem,
     s: &SolutionStack,
 ) -> Rc<RefCell<Clause>> {
-    info!(target: "cdcl", "Adding new clause from literals {:?}", lits);
+    trace!(target: "cdcl", "Adding new clause from literals {:?}", lits);
 
     // create new clause
     let clause_rc = Rc::new(RefCell::new(Clause {
@@ -679,10 +679,14 @@ pub fn add_new_clause_from_literals(
     p.list_of_clauses.push(Rc::clone(&clause_rc));
 
     // drop some clauses if we had too many
-    if p.list_of_conflict_clauses.len() > 2 * p.list_of_clauses.len() {
-        warn!(target: "cdcl", "Dropping conflict clauses");
-        p.list_of_conflict_clauses.clear();
-    }
+    let conflict_clause_count = p.list_of_conflict_clauses.len();
+    let all_clause_count = p.list_of_clauses.len();
+    info!(target: "foo", "two list length: {}, {}", conflict_clause_count, all_clause_count);
+    // if conflict_clause_count >  (all_clause_count>> 2) {
+    //     warn!(target: "cdcl", "Dropping conflict clauses");
+    //     p.list_of_conflict_clauses.clear();
+    //     p.list_of_clauses.truncate(all_clause_count - conflict_clause_count);
+    // }
 
     p.list_of_conflict_clauses.push(Rc::clone(&clause_rc));
     drop(clause);
@@ -720,7 +724,7 @@ fn mutate_stack_for_cdcl(
             step.assignment_type = SolutionStepType::Zombied;
         }
     }
-    info!(target: "cdcl", "Stack is now {:?}", s);
+    trace!(target: "cdcl", "Stack is now {:?}", s);
 }
 
 ///
