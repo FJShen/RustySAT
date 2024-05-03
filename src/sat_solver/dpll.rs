@@ -683,25 +683,25 @@ fn backtrack_all_variables_in_clause(
 
     let mut index_to_wipe = vec![];
 
-    // a free assignment to backtrack, or an implied assignment of such a free one
-    let mut in_shadow_of_free_assignment = false;
+    // all implied assignments, plus var_set variables can be backtracked
 
     s.stack.iter().enumerate().for_each(|(idx, step)| {
+        let mut wipe = false;
         let var = step.assignment.variable;
         if var_set.contains(&var) {
-            in_shadow_of_free_assignment = true;
+            wipe = true;
         } else {
             match step.assignment_type {
                 SolutionStepType::FreeChoiceFirstTry
                 | SolutionStepType::FreeChoiceSecondTry
                 | SolutionStepType::ForcedAtInit => {
-                    in_shadow_of_free_assignment = false;
+                    wipe = false;
                 }
-                _ => {}
+                _ => {wipe = true;}
             }
         }
 
-        if in_shadow_of_free_assignment {
+        if wipe {
             index_to_wipe.push(idx);
         }
     });
@@ -738,6 +738,12 @@ fn backtrack_all_variables_in_clause(
             *status_ref = LiteralState::Unknown;
         }
     });
+
+    // finally, change all remaining at-will assignments into First tries
+    s.stack.iter_mut().for_each(|step|{match step.assignment_type{
+        SolutionStepType::FreeChoiceSecondTry => step.assignment_type = SolutionStepType::FreeChoiceFirstTry,
+        _ => {}
+    }});
 
 }
 
