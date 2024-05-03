@@ -10,6 +10,7 @@ pub struct DLIS {
     pub frequency_literal_assigned: BTreeSet<(u64, Literal)>,
     pub frequency_literal_unassigned: BTreeSet<(u64, Literal)>,
     use_bcp: bool,
+    use_cdcl: bool
 }
 
 impl Debug for DLIS {
@@ -31,6 +32,7 @@ impl Heuristics for DLIS {
             frequency_literal_assigned: BTreeSet::<(u64, Literal)>::new(),
             frequency_literal_unassigned: BTreeSet::<(u64, Literal)>::new(),
             use_bcp: false,
+            use_cdcl: false
         }
     }
 
@@ -146,5 +148,13 @@ impl Heuristics for DLIS {
 
     fn use_bcp(&self) -> bool {
         self.use_bcp
+    }    
+    
+    fn set_use_cdcl(&mut self, _use_cdcl: bool) {
+        self.use_cdcl = _use_cdcl;
+    }
+
+    fn use_cdcl(&self) -> bool {
+        self.use_cdcl
     }
 }

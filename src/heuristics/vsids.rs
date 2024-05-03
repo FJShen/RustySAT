@@ -11,6 +11,7 @@ pub struct VSIDS {
     pub counter_literal_unassigned: BTreeSet<(u64, Literal)>,
     pub iteration: u64,
     use_bcp: bool,
+    use_cdcl: bool
 }
 
 impl Debug for VSIDS {
@@ -33,6 +34,7 @@ impl Heuristics for VSIDS {
             counter_literal_unassigned: BTreeSet::<(u64, Literal)>::new(),
             iteration: 1,
             use_bcp: false,
+            use_cdcl: false
         }
     }
 
@@ -119,5 +121,13 @@ impl Heuristics for VSIDS {
 
     fn use_bcp(&self) -> bool {
         self.use_bcp
+    }
+
+    fn set_use_cdcl(&mut self, _use_cdcl: bool) {
+        self.use_cdcl = _use_cdcl;
+    }
+
+    fn use_cdcl(&self) -> bool {
+        self.use_cdcl
     }
 }

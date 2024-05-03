@@ -9,6 +9,7 @@ pub struct Ascending {
     pub variable_unassigned: BTreeSet<Variable>,
     pub variable_assigned: BTreeSet<Variable>,
     use_bcp: bool,
+    use_cdcl: bool
 }
 
 impl Debug for Ascending {
@@ -31,6 +32,7 @@ impl Heuristics for Ascending {
             variable_unassigned: BTreeSet::<Variable>::new(),
             variable_assigned: BTreeSet::<Variable>::new(),
             use_bcp: false,
+            use_cdcl: false
         }
     }
 
@@ -85,5 +87,13 @@ impl Heuristics for Ascending {
 
     fn use_bcp(&self) -> bool {
         self.use_bcp
+    }
+
+    fn set_use_cdcl(&mut self, _use_cdcl: bool) {
+        self.use_cdcl = _use_cdcl;
+    }
+
+    fn use_cdcl(&self) -> bool {
+        self.use_cdcl
     }
 }

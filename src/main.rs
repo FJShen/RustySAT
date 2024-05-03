@@ -28,11 +28,15 @@ struct Args {
 
     #[arg(long)]
     satisfiable: bool,
+
+    #[arg(long)]
+    no_cdcl: bool
 }
 
-fn test(input : &String, mut h: impl Heuristics, use_bcp: bool) -> (Problem, Option<SolutionStack>) {
+fn test(input : &String, mut h: impl Heuristics, use_bcp: bool, use_cdcl: bool) -> (Problem, Option<SolutionStack>) {
     let mut prof = SolverProfiler::new();
     h.set_use_bcp(use_bcp);
+    h.set_use_cdcl(use_cdcl);
     let mut problem = parser::parse(input, &mut h);
     trace!(target: "solver", "problem is: {:#?}", problem);
     prof.reset_start_time();
@@ -70,11 +74,12 @@ fn main() {
     let args = Args::parse();
     info!(target: "solver", "{:?}", args);
     let use_bcp = !args.no_bcp;
+    let use_cdcl = !args.no_cdcl;
 
     let (p, s) = match args.heuristics.as_str() {
-        "ascending" => test(&args.input, Ascending::new(), use_bcp),
-        "dlis"      => test(&args.input, DLIS::new(), use_bcp),
-        "vsids"     => test(&args.input, VSIDS::new(), use_bcp),
+        "ascending" => test(&args.input, Ascending::new(), use_bcp, use_cdcl),
+        "dlis"      => test(&args.input, DLIS::new(), use_bcp, use_cdcl),
+        "vsids"     => test(&args.input, VSIDS::new(), use_bcp, use_cdcl),
         _           => panic!("Unrecognised heuristics specified"),
     };
 

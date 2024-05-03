@@ -21,6 +21,17 @@ impl Not for Polarity {
     }
 }
 
+impl Not for Literal{
+    type Output = Self;
+    fn not(self) -> Self::Output {
+        let new_p = match self.polarity {
+            Polarity::Off => Polarity::On,
+            Polarity::On => Polarity::Off,
+        };
+        Literal{variable: self.variable, polarity: new_p}
+    }
+}
+
 impl fmt::Debug for Literal {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         // "a" and "b'" would look like "0" and "1'"
@@ -172,7 +183,7 @@ impl fmt::Debug for SolutionStep {
             match self.assignment_type {
                 SolutionStepType::FreeChoiceFirstTry => "t",
                 SolutionStepType::FreeChoiceSecondTry => "T",
-                SolutionStepType::ForcedAtBCP => "x",
+                SolutionStepType::ForcedAtBCP{unit_clause_id:_} => "x",
                 SolutionStepType::ForcedAtInit => "I",
             }
         )?;

@@ -2,7 +2,7 @@ use crate::{heuristics::heuristics::Heuristics, profiler::SolverProfiler};
 
 use super::*;
 use log::{info, trace};
-use std::collections::BTreeMap;
+use std::{borrow::Borrow, cell::Ref, collections::BTreeMap};
 use tailcall::tailcall;
 
 // If the problem is UNSAT, we will return None
@@ -102,8 +102,8 @@ pub fn force_assignment_for_unit_clauses(
     let it_literals_to_force = problem
         .list_of_clauses
         .iter()
-        .filter(|rc| rc.borrow().list_of_literals.len() == 1)
-        .map(|rc| rc.borrow().list_of_literals[0]);
+        .filter(|rc| (***rc).borrow().list_of_literals.len() == 1)
+        .map(|rc| (**rc).borrow().list_of_literals[0]);
 
     let mut _temp_assignment_map = BTreeMap::<Variable, Polarity>::new();
     let mut ret = true;
@@ -267,13 +267,13 @@ pub fn update_literal_info(
         // state.
         li_mut_borrow.list_of_clauses.iter().for_each(|rc| {
             if heuristics.use_bcp() {
-                if rc.borrow().hits_watch_literals(opposite_pol_literal) {
+                if (**rc).borrow().hits_watch_literals(opposite_pol_literal) {
                     problem.list_of_clauses_to_check.insert(Rc::clone(rc));
                 }
             } else {
                 problem.list_of_clauses_to_check.insert(Rc::clone(rc));
             }
-            heuristics.unsatisfy_clause(&rc.borrow());
+            heuristics.unsatisfy_clause(&(**rc).borrow());
         });
     }
 }
@@ -287,7 +287,7 @@ pub fn boolean_constraint_propagation(
     heuristics: &mut impl Heuristics,
     prof: &mut SolverProfiler,
 ) -> bool {
-    let mut implied_assignments = BTreeMap::<Variable, Polarity>::new();
+    let mut implied_assignments = BTreeMap::<Variable, (Polarity, u32)>::new();
 
     while problem.list_of_clauses_to_check.len() > 0 || implied_assignments.len() > 0 {
         // Examine each clause, we either find a substitute variable to watch, or
@@ -307,7 +307,7 @@ pub fn boolean_constraint_propagation(
                     let mut conflict = false;
 
                     implied_assignments.entry(l.variable)
-                        .and_modify(|p|{ // we aren't really modifying anything
+                        .and_modify(|(p, _id)|{ // we aren't really modifying anything
                             if *p != l.polarity {
                                 // conflict!
                                 trace!(target: "bcp", "Clause {}: Variable {:?} implied to be both polarities", c.id, l.variable);
@@ -321,9 +321,25 @@ pub fn boolean_constraint_propagation(
                         .or_insert_with(||{
                             trace!(target: "bcp", "Clause {}: Variable {:?} implied to be {:?}", c.id, l.variable, l.polarity);
                             trace!(target: "bcp", "{:?}", c);
-                            l.polarity
+                            (l.polarity, c.id)
                         });
                     if conflict {
+                        drop(c);
+                        if heuristics.use_cdcl() {
+                            let conflict_literals = infer_new_conflict_clause(
+                                0,
+                                (*rc).borrow(),
+                                problem,
+                                solution,
+                                &implied_assignments,
+                            );
+                            trace!(target: "cdcl", "inferred conflit literals {:?}", conflict_literals);
+                            let flipped_literals: BTreeSet<Literal> =
+                                conflict_literals.iter().map(|l| !*l).collect();
+                            let c_rc = add_new_clause_from_literals(flipped_literals, problem, solution);
+                            backtrack_all_variables_in_clause(&(*c_rc).borrow(), problem, solution, heuristics, prof);
+                        }
+
                         return false;
                     }
                 }
@@ -334,8 +350,14 @@ pub fn boolean_constraint_propagation(
         // At this point, we have finished examining all clauses affected by a
         // literal assignment, but we end up with a list of more implied assignments.
         // We try those implied assignments one at a time.
-        if let Some((v, p)) = implied_assignments.pop_first() {
-            solution.push_step(v, p, SolutionStepType::ForcedAtBCP);
+        if let Some((v, (p, c_id))) = implied_assignments.pop_first() {
+            solution.push_step(
+                v,
+                p,
+                SolutionStepType::ForcedAtBCP {
+                    unit_clause_id: c_id,
+                },
+            );
             trace!(target: "bcp", "Assinging variable {:?}", v);
             trace!(target: "bcp", "solution stack: {:?}", solution);
 
@@ -511,125 +533,335 @@ pub fn update_clause_state_and_resolve_conflict(
     }
 }
 
+pub fn infer_new_conflict_clause(
+    indent: u32,
+    c: Ref<Clause>,
+    p: &Problem,
+    s: &SolutionStack,
+    implied_assignment_worklist: &BTreeMap<Variable, (Polarity, u32)>,
+) -> BTreeSet<Literal> {
+    // helper method that scans the solution stack to figure out the nature of
+    // assignment
+    trace!(target: "cdcl", "#{indent} Inferring conflict clause on {:?}", c);
+
+    let f_find_assignment_step = |l: &Literal| -> SolutionStep {
+        trace!(target: "cdcl", "#{indent} Looking for {:?} on solution stack", l.variable);
+        let op_step = s.stack.iter().find(|s| s.assignment.variable == l.variable);
+        if let Some(step) = op_step {
+            return *step;
+        } else {
+            let (p, cid) = implied_assignment_worklist.get(&l.variable).unwrap();
+            let fake_step = SolutionStep {
+                assignment: Assignment {
+                    variable: l.variable,
+                    polarity: *p,
+                },
+                assignment_type: SolutionStepType::ForcedAtBCP {
+                    unit_clause_id: *cid,
+                },
+            };
+            fake_step
+        }
+    };
+
+    // walk over each literal of clause, find out which at-will assignment
+    // caused it to happen
+    let own_cid = c.id;
+    let new_conflict_clause_set: BTreeSet<Literal> = c
+        .list_of_literals
+        .iter()
+        .map(|l| f_find_assignment_step(l))
+        .flat_map(|step| match step.assignment_type {
+            SolutionStepType::ForcedAtInit
+            | SolutionStepType::FreeChoiceFirstTry
+            | SolutionStepType::FreeChoiceSecondTry => {
+                let add_lit = Literal {
+                    variable: step.assignment.variable,
+                    polarity: step.assignment.polarity,
+                };
+                trace!(target: "cdcl", "#{indent} Adding literal {:?}", add_lit);
+                BTreeSet::from([add_lit])
+            }
+            SolutionStepType::ForcedAtBCP {
+                unit_clause_id: c_id,
+            } => {
+                if c_id == own_cid {
+                    trace!(target: "cdcl", "#{indent} By myself, stop resursing");
+                    BTreeSet::from([])
+                } else {
+                    let rc : &Rc<RefCell<Clause>> = p.list_of_clauses.get(c_id as usize).unwrap();
+                    let recurse_clause: Ref<Clause> = (**rc).borrow();
+                    trace!(target: "cdcl", "#{indent} Recurse on clause {:?}", recurse_clause);
+                    infer_new_conflict_clause(
+                        indent + 1,
+                        recurse_clause,
+                        p,
+                        s,
+                        implied_assignment_worklist,
+                    )
+                }
+            }
+        })
+        .collect();
+    new_conflict_clause_set
+}
+
+pub fn add_new_clause_from_literals(
+    lits: BTreeSet<Literal>,
+    p: &mut Problem,
+    s: &SolutionStack,
+) -> Rc<RefCell<Clause>> {
+    info!(target: "cdcl", "Adding new clause from literals {:?}", lits);
+
+    // create new clause
+    let clause_rc = Rc::new(RefCell::new(Clause {
+        id: 0,
+        list_of_literals: vec![],
+        list_of_literal_infos: vec![],
+        watch_literals: [NULL_LITERAL; 2],
+    }));
+
+    let mut clause_ref = clause_rc.borrow_mut();
+
+    let list_of_lits = Vec::from_iter(lits.iter().copied());
+    let list_of_lit_infos: Vec<Rc<RefCell<LiteralInfo>>> = list_of_lits
+        .iter()
+        .map(|l| Rc::clone(p.list_of_literal_infos.get(&l).unwrap()))
+        .collect();
+
+    // Assign watch literals. At this point all literals should be UNSAT.
+    // We pick the latest assigned variable to be one of the watch literals, it
+    // will be flipped and become SAT when we backtrack.
+    let latest_literal = s
+        .stack
+        .iter()
+        .map(|step| Literal {
+            variable: step.assignment.variable,
+            polarity: step.assignment.polarity,
+        })
+        .rfind(|l| lits.contains(&!(*l)))
+        .unwrap();
+    clause_ref.watch_literals[0] = !latest_literal;
+    clause_ref.watch_literals[1] = *list_of_lits
+        .iter()
+        .find(|l| **l != !latest_literal)
+        .unwrap_or(&NULL_LITERAL);
+
+    clause_ref.list_of_literals = list_of_lits;
+    clause_ref.list_of_literal_infos = list_of_lit_infos;
+    clause_ref.id = p.list_of_clauses.len() as u32;
+
+    drop(clause_ref);
+
+    // link the clause to each LiteralInfo
+    let clause : Ref<Clause> = (*clause_rc).borrow();
+    clause
+        .list_of_literal_infos
+        .iter()
+        .for_each(|li_ref| {
+            let mut li = li_ref.borrow_mut();
+            li.list_of_clauses.push(Rc::clone(&clause_rc));
+            //info!(target: "cdcl", "Adding clause id {} to li {:?}", clause_rc.borrow().id, li);
+        });
+
+    // append clause to the list_of_clauses
+    info!(target: "cdcl", "New clause added {}: {:?}", (*clause_rc).borrow().id, (*clause_rc).borrow());
+    p.list_of_clauses.push(Rc::clone(&clause_rc));
+    drop(clause);
+    clause_rc
+}
+
+// a crude form of non chronological backtracking
+fn backtrack_all_variables_in_clause(
+    c: &Clause,
+    p: &mut Problem,
+    s: &mut SolutionStack,
+    heuristics: &mut impl Heuristics,
+    prof: &mut SolverProfiler,
+) {
+    let var_set = BTreeSet::from_iter(c.list_of_literals.iter().map(|l| l.variable));
+
+    let mut index_to_wipe = vec![];
+
+    // a free assignment to backtrack, or an implied assignment of such a free one
+    let mut in_shadow_of_free_assignment = false;
+
+    s.stack.iter().enumerate().for_each(|(idx, step)| {
+        let var = step.assignment.variable;
+        if var_set.contains(&var) {
+            in_shadow_of_free_assignment = true;
+        } else {
+            match step.assignment_type {
+                SolutionStepType::FreeChoiceFirstTry
+                | SolutionStepType::FreeChoiceSecondTry
+                | SolutionStepType::ForcedAtInit => {
+                    in_shadow_of_free_assignment = false;
+                }
+                _ => {}
+            }
+        }
+
+        if in_shadow_of_free_assignment {
+            index_to_wipe.push(idx);
+        }
+    });
+
+    index_to_wipe.iter().rev().for_each(|idx| {
+        let step = s.stack.remove(*idx);
+        let var = step.assignment.variable;
+        trace!(target: "backtrack", "Dropping variable {:?}", var);
+
+        heuristics.unassign_variable(var);
+
+        // Update the list_of_variables
+        // May panic in the unlikely event var does not exist in
+        // list_of_variables
+        mark_variable_unassigned(p, var);
+        prof.bump_backtracked_decisions();
+
+        // update the list_of_literal_infos
+        if let Some(li) = p.list_of_literal_infos.get(&Literal {
+            variable: var,
+            polarity: Polarity::On,
+        }) {
+            let status_ref = &mut li.borrow_mut().status;
+            assert!(*status_ref != LiteralState::Unknown);
+            *status_ref = LiteralState::Unknown;
+        }
+
+        if let Some(li) = p.list_of_literal_infos.get(&Literal {
+            variable: var,
+            polarity: Polarity::Off,
+        }) {
+            let status_ref = &mut li.borrow_mut().status;
+            assert!(*status_ref != LiteralState::Unknown);
+            *status_ref = LiteralState::Unknown;
+        }
+    });
+
+}
+
 ///
 /// OBSOLETE METHODS BELOW
 ///
 
 /// Returns a variable that is unresolved, and a recommendation for which
 /// polarity to use. If all variables have been resolved, returns None.  
-pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)> {
-    // heuristic: pick an unassigned variable that appears in the most amount
-    // of clauses.
-    let tuple_result: Option<(Variable, usize, usize)> = problem
-        .list_of_variables
-        .iter()
-        .filter(|(_v, vs)| **vs == VariableState::Unassigned)
-        .map(|(v, _vs)| {
-            let mut on_count: usize = 0;
-            let mut off_count: usize = 0;
-            if let Some(li) = problem.list_of_literal_infos.get(&Literal {
-                variable: *v,
-                polarity: Polarity::On,
-            }) {
-                on_count = li.borrow().list_of_clauses.len();
-            }
-            if let Some(li) = problem.list_of_literal_infos.get(&Literal {
-                variable: *v,
-                polarity: Polarity::Off,
-            }) {
-                off_count = li.borrow().list_of_clauses.len();
-            }
-            (*v, on_count, off_count)
-        })
-        .max_by_key(|(_v, on_count, off_count)| on_count + off_count);
+/// 
+pub fn _foo(){}
+// pub fn get_one_unresolved_var(problem: &Problem) -> Option<(Variable, Polarity)> {
+//     // heuristic: pick an unassigned variable that appears in the most amount
+//     // of clauses.
+//     let tuple_result: Option<(Variable, usize, usize)> = problem
+//         .list_of_variables
+//         .iter()
+//         .filter(|(_v, vs)| **vs == VariableState::Unassigned)
+//         .map(|(v, _vs)| {
+//             let mut on_count: usize = 0;
+//             let mut off_count: usize = 0;
+//             if let Some(li) = problem.list_of_literal_infos.get(&Literal {
+//                 variable: *v,
+//                 polarity: Polarity::On,
+//             }) {
+//                 on_count = li.borrow().list_of_clauses.len();
+//             }
+//             if let Some(li) = problem.list_of_literal_infos.get(&Literal {
+//                 variable: *v,
+//                 polarity: Polarity::Off,
+//             }) {
+//                 off_count = li.borrow().list_of_clauses.len();
+//             }
+//             (*v, on_count, off_count)
+//         })
+//         .max_by_key(|(_v, on_count, off_count)| on_count + off_count);
 
-    if let Some((v, on_count, off_count)) = tuple_result {
-        if on_count > off_count {
-            return Some((v, Polarity::On));
-        } else {
-            return Some((v, Polarity::Off));
-        }
-    } else {
-        return None;
-    }
-}
+//     if let Some((v, on_count, off_count)) = tuple_result {
+//         if on_count > off_count {
+//             return Some((v, Polarity::On));
+//         } else {
+//             return Some((v, Polarity::Off));
+//         }
+//     } else {
+//         return None;
+//     }
+// }
 
-/// Obsolete
-/// Sanity check solely for debug purpose. Does there exist incoherence in the
-/// representation? If so, panic!
-pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
-    // does the Problem's variable states match with the current Solution?
-    solution_stack.stack.iter().for_each(|step| {
-        let a = step.assignment;
-        let sol_v = a.variable;
-        // the variable state must be Assigned
-        if problem.list_of_variables[&sol_v] != VariableState::Assigned {
-            panic!(
-                "variable {:?} is on solution stack, but variable state in problem is not assigned",
-                sol_v
-            );
-        }
-    });
+// /// Obsolete
+// /// Sanity check solely for debug purpose. Does there exist incoherence in the
+// /// representation? If so, panic!
+// pub fn panic_if_incoherent(problem: &Problem, solution_stack: &SolutionStack) {
+//     // does the Problem's variable states match with the current Solution?
+//     solution_stack.stack.iter().for_each(|step| {
+//         let a = step.assignment;
+//         let sol_v = a.variable;
+//         // the variable state must be Assigned
+//         if problem.list_of_variables[&sol_v] != VariableState::Assigned {
+//             panic!(
+//                 "variable {:?} is on solution stack, but variable state in problem is not assigned",
+//                 sol_v
+//             );
+//         }
+//     });
 
-    problem
-        .list_of_variables
-        .iter()
-        .filter(|(_, vs)| **vs == VariableState::Unassigned)
-        .for_each(|(v, vs)| {
-            if solution_stack
-                .stack
-                .iter()
-                .any(|step| step.assignment.variable == *v)
-            {
-                panic!(
-                    "variable {:?} is unassigned, but it appears on solution stack",
-                    (v, vs)
-                );
-            }
-        });
+//     problem
+//         .list_of_variables
+//         .iter()
+//         .filter(|(_, vs)| **vs == VariableState::Unassigned)
+//         .for_each(|(v, vs)| {
+//             if solution_stack
+//                 .stack
+//                 .iter()
+//                 .any(|step| step.assignment.variable == *v)
+//             {
+//                 panic!(
+//                     "variable {:?} is unassigned, but it appears on solution stack",
+//                     (v, vs)
+//                 );
+//             }
+//         });
 
-    // does the state of a literal match with the state of variable?
-    problem.list_of_variables.iter().for_each(|(v, vs)| {
-        if let Some(li) = problem.list_of_literal_infos.get(&Literal {
-            variable: *v,
-            polarity: Polarity::On,
-        }) {
-            let status_ref = &li.borrow().status;
-            if *status_ref == LiteralState::Unknown && *vs == VariableState::Unassigned {
-            } else if *status_ref == LiteralState::Sat && *vs == VariableState::Assigned {
-            } else if *status_ref == LiteralState::Unsat && *vs == VariableState::Assigned {
-            } else {
-                panic!(
-                    "LiteralInfo {:?} is incoherent with variable {:?}",
-                    li,
-                    (v, vs)
-                );
-            }
-        }
-        if let Some(li) = problem.list_of_literal_infos.get(&Literal {
-            variable: *v,
-            polarity: Polarity::Off,
-        }) {
-            let status_ref = &li.borrow().status;
-            if *status_ref == LiteralState::Unknown && *vs == VariableState::Unassigned {
-            } else if *status_ref == LiteralState::Sat && *vs == VariableState::Assigned {
-            } else if *status_ref == LiteralState::Unsat && *vs == VariableState::Assigned {
-            } else {
-                panic!(
-                    "LiteralInfo {:?} is incoherent with variable {:?}",
-                    li,
-                    (v, vs)
-                );
-            }
-        }
-    });
+//     // does the state of a literal match with the state of variable?
+//     problem.list_of_variables.iter().for_each(|(v, vs)| {
+//         if let Some(li) = problem.list_of_literal_infos.get(&Literal {
+//             variable: *v,
+//             polarity: Polarity::On,
+//         }) {
+//             let status_ref = &li.borrow().status;
+//             if *status_ref == LiteralState::Unknown && *vs == VariableState::Unassigned {
+//             } else if *status_ref == LiteralState::Sat && *vs == VariableState::Assigned {
+//             } else if *status_ref == LiteralState::Unsat && *vs == VariableState::Assigned {
+//             } else {
+//                 panic!(
+//                     "LiteralInfo {:?} is incoherent with variable {:?}",
+//                     li,
+//                     (v, vs)
+//                 );
+//             }
+//         }
+//         if let Some(li) = problem.list_of_literal_infos.get(&Literal {
+//             variable: *v,
+//             polarity: Polarity::Off,
+//         }) {
+//             let status_ref = &li.borrow().status;
+//             if *status_ref == LiteralState::Unknown && *vs == VariableState::Unassigned {
+//             } else if *status_ref == LiteralState::Sat && *vs == VariableState::Assigned {
+//             } else if *status_ref == LiteralState::Unsat && *vs == VariableState::Assigned {
+//             } else {
+//                 panic!(
+//                     "LiteralInfo {:?} is incoherent with variable {:?}",
+//                     li,
+//                     (v, vs)
+//                 );
+//             }
+//         }
+//     });
 
-    // does the state of a clause match with the state of its literals?
-    problem
-        .list_of_clauses
-        .iter()
-        .map(|rc| rc.borrow())
-        .for_each(|_c| {
-            // assert!(c.recalculate_clause_state(problem) == c.status);
-        });
-}
+//     // does the state of a clause match with the state of its literals?
+//     problem
+//         .list_of_clauses
+//         .iter()
+//         .map(|rc| rc.borrow())
+//         .for_each(|_c| {
+//             // assert!(c.recalculate_clause_state(problem) == c.status);
+//         });
+// }

@@ -14,4 +14,6 @@ pub trait Heuristics {
         /* default impl */
         false
     }
+    fn set_use_cdcl(&mut self, _use_cdcl: bool);
+    fn use_cdcl(&self) -> bool {false}
 }

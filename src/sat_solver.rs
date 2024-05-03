@@ -124,8 +124,8 @@ pub enum SolutionStepType {
     FreeChoiceFirstTry,
     // we have flipped this assignment's polarity during a backtrack
     FreeChoiceSecondTry,
-    // forced due to BCP
-    ForcedAtBCP,
+    // forced due to BCP - which unit clause contributed this implication?
+    ForcedAtBCP{unit_clause_id: u32},
     // forced due to it belonging to a unit clause
     ForcedAtInit,
 }
