@@ -337,7 +337,7 @@ pub fn boolean_constraint_propagation(
                             let flipped_literals: BTreeSet<Literal> =
                                 conflict_literals.iter().map(|l| !*l).collect();
                             let c_rc = add_new_clause_from_literals(flipped_literals, problem, solution);
-                            backtrack_all_variables_in_clause(&(*c_rc).borrow(), problem, solution, heuristics, prof);
+                            backtrack_one_variables_in_clause(&(*c_rc).borrow(), problem, solution, heuristics, prof);
                         }
 
                         return false;
@@ -672,7 +672,7 @@ pub fn add_new_clause_from_literals(
 }
 
 // a crude form of non chronological backtracking
-fn backtrack_all_variables_in_clause(
+fn backtrack_one_variables_in_clause(
     c: &Clause,
     p: &mut Problem,
     s: &mut SolutionStack,
@@ -685,31 +685,18 @@ fn backtrack_all_variables_in_clause(
 
     // all implied assignments, plus var_set variables can be backtracked
 
-    s.stack.iter().enumerate().for_each(|(idx, step)| {
-        let mut wipe = false;
+    for (idx, step) in s.stack.iter().enumerate().rev() {
         let var = step.assignment.variable;
+        index_to_wipe.push(idx);
         if var_set.contains(&var) {
-            wipe = true;
-        } else {
-            match step.assignment_type {
-                SolutionStepType::FreeChoiceFirstTry
-                | SolutionStepType::FreeChoiceSecondTry
-                | SolutionStepType::ForcedAtInit => {
-                    wipe = false;
-                }
-                _ => {wipe = true;}
-            }
+            break;
         }
+    };
 
-        if wipe {
-            index_to_wipe.push(idx);
-        }
-    });
-
-    index_to_wipe.iter().rev().for_each(|idx| {
+    index_to_wipe.iter().for_each(|idx| {
         let step = s.stack.remove(*idx);
         let var = step.assignment.variable;
-        trace!(target: "backtrack", "Dropping variable {:?}", var);
+        info!(target: "cdcl", "Dropping variable {:?}", var);
 
         heuristics.unassign_variable(var);
 
@@ -738,12 +725,6 @@ fn backtrack_all_variables_in_clause(
             *status_ref = LiteralState::Unknown;
         }
     });
-
-    // finally, change all remaining at-will assignments into First tries
-    s.stack.iter_mut().for_each(|step|{match step.assignment_type{
-        SolutionStepType::FreeChoiceSecondTry => step.assignment_type = SolutionStepType::FreeChoiceFirstTry,
-        _ => {}
-    }});
 
 }
 
