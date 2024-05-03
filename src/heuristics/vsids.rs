@@ -2,12 +2,12 @@ use crate::heuristics::heuristics::*;
 use crate::sat_solver::*;
 use core::fmt;
 use log::trace;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{HashMap, HashSet, BTreeSet};
 use std::fmt::Debug;
 
 pub struct VSIDS {
-    pub literal_counter: BTreeMap<Literal, u64>,
-    pub counter_literal_assigned: BTreeSet<(u64, Literal)>,
+    pub literal_counter: HashMap<Literal, u64>,
+    pub counter_literal_assigned: HashSet<(u64, Literal)>,
     pub counter_literal_unassigned: BTreeSet<(u64, Literal)>,
     pub iteration: u64,
     use_bcp: bool,
@@ -28,8 +28,8 @@ impl Heuristics for VSIDS {
     // creates a new heuristics struct
     fn new() -> Self {
         VSIDS {
-            literal_counter: BTreeMap::<Literal, u64>::new(),
-            counter_literal_assigned: BTreeSet::<(u64, Literal)>::new(),
+            literal_counter: HashMap::<Literal, u64>::new(),
+            counter_literal_assigned: HashSet::<(u64, Literal)>::new(),
             counter_literal_unassigned: BTreeSet::<(u64, Literal)>::new(),
             iteration: 1,
             use_bcp: false,

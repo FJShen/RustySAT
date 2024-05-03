@@ -2,12 +2,12 @@ use crate::heuristics::heuristics::*;
 use crate::sat_solver::*;
 use core::fmt;
 use log::trace;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{HashMap, HashSet, BTreeSet};
 use std::fmt::Debug;
 
 pub struct DLIS {
-    pub literal_frequency: BTreeMap<Literal, u64>,
-    pub frequency_literal_assigned: BTreeSet<(u64, Literal)>,
+    pub literal_frequency: HashMap<Literal, u64>,
+    pub frequency_literal_assigned: HashSet<(u64, Literal)>,
     pub frequency_literal_unassigned: BTreeSet<(u64, Literal)>,
     use_bcp: bool,
 }
@@ -27,8 +27,8 @@ impl Heuristics for DLIS {
     // creates a new heuristics struct
     fn new() -> Self {
         DLIS {
-            literal_frequency: BTreeMap::<Literal, u64>::new(),
-            frequency_literal_assigned: BTreeSet::<(u64, Literal)>::new(),
+            literal_frequency: HashMap::<Literal, u64>::new(),
+            frequency_literal_assigned: HashSet::<(u64, Literal)>::new(),
             frequency_literal_unassigned: BTreeSet::<(u64, Literal)>::new(),
             use_bcp: false,
         }
