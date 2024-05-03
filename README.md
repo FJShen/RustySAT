@@ -33,6 +33,13 @@ Current installation options:
 
 The last command in the script file compiles the solver: `cargo build --release`.
 
+### To Download Benchmark Files
+The script file `get.sh` fetches CNF test files for benchmarking from SATLIB.
+Run the command:
+```
+bash get.sh
+```
+
 ### To Run
 **CLI Interface**
 
