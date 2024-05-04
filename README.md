@@ -227,3 +227,9 @@ unsatisfiable, then transfer control to
 This method also keeps a record of all implied assignments in each call. If it
 detects a variable being implied to be both on and off, it transfers control to
 `udpate_clause_state_and_resolve_conflict` to perform backtracking.
+
+#### add_parsed_clause / add_conflict_clause
+Allows the heuristics to keep track of available literals and update their scores if necessary. For `Ascending`, literals are simply registered with the heuristics to ensure all variables are assigned at the end. For `DLIS`, the frequency of literals during parsing of the input file is noted, but conflict clauses do not impact the DLIS recommendation. `VSIDS` is the only heuristics that updates the scores of literals when a conflict clause is encountered. To avoid runtime delay, instead of dividing all literal scores by a fixed value at every interval, we increase the amount to be added to the score after every recommendation to achieve the effect of depreciating current score values.
+
+#### decide
+This method requests a recommendation to assign a variable to a specific polarity. Depending on the heuristics used, the recommendation differs. For `Ascending`, the variable with the lowest index is selected from the unassigned literal set. For `DLIS`, the most frequent variable is selected from the unassigned literal set. For `VSIDS`, the literal with the highest score due to frequency appearing in recently discovered conflict clauses, is selected for recommendation.
